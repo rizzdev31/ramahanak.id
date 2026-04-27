@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""
+Database Configuration
+Sinkron dengan Laravel .env file
+"""
+
+import os
+from dotenv import load_dotenv
+
+# Load .env dari root Laravel
+load_dotenv()
+
+# Database Configuration (ambil dari environment atau default)
+DB_CONFIG = {
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': int(os.getenv('DB_PORT', 3306)),
+    'user': os.getenv('DB_USERNAME', 'root'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'database': os.getenv('DB_DATABASE', 'db_ra'),
+    'charset': 'utf8mb4',
+    'use_unicode': True,
+}
+
+# Stopwords tambahan (selain dari Sastrawi)
+CUSTOM_STOPWORDS = [
+    'saya', 'aku', 'kamu', 'dia', 'mereka', 'kami', 'kita',
+    'ini', 'itu', 'tersebut',
+    'ada', 'adalah', 'ialah',
+    'dari', 'ke', 'pada', 'dalam', 'untuk',
+    'yang', 'dan', 'atau', 'tetapi', 'namun',
+]
+
+# Kata kerja transitif (untuk identifikasi pelaku-korban)
+TRANSITIVE_VERBS = [
+    'pukul', 'memukul', 'mukul', 'nonjok', 'hajar', 'tonjok',
+    'tendang', 'menendang',
+    'dorong', 'mendorong',
+    'tolak', 'menolak',
+    'ejek', 'mengejek',
+    'hina', 'menghina',
+    'ancam', 'mengancam',
+    'paksa', 'memaksa',
+    'ambil', 'mengambil',
+    'curi', 'mencuri',
+    'rusak', 'merusak',
+    'bantu', 'membantu', 'menolong', 'tolong',
+    'ajari', 'mengajari', 'ajarkan',
+]
+
+# Prefix kata kerja untuk identifikasi tipe
+VERB_PREFIXES = {
+    'me': 'active_transitive',   # memukul → ada pelaku dan korban
+    'ber': 'active_intransitive', # berkelahi → ada pelaku saja
+    'di': 'passive',              # dipukul → fokus ke korban
+    'ter': 'accidental',          # terjatuh → kecelakaan
+}
+
+# ═══════════════════════════════════════════════════════════
+# ✅ NEGATION SUPPORT - NEW ADDITION
+# ═══════════════════════════════════════════════════════════
+
+# Negation prefix words (kata negasi)
+NEGATION_PREFIXES = [
+    'tidak', 'bukan', 'tak', 'nggak', 'gak', 'enggak',
+    'ga', 'ndak', 'kagak'
+]
+
+# Frequency/intensity modifiers (pengubah intensitas)
+FREQUENCY_MODIFIERS = [
+    'pernah', 'selalu', 'sering', 'jarang', 'kadang',
+    'sempat', 'biasa', 'kerap'
+]
+
+# Separator words (pemisah konteks - break negation link)
+NEGATION_SEPARATORS = [
+    'yang', 'tapi', 'tetapi', 'namun', 'karena', 'sebab',
+    'meskipun', 'walaupun', 'jika', 'kalau', 'ketika',
+    ',', ';', '.'
+]
+
+# Maximum distance for negation to affect target word
+MAX_NEGATION_DISTANCE = 3  # kata
+
+# Partial negation words (negasi parsial - tidak full flip)
+PARTIAL_NEGATION = [
+    'kurang', 'agak', 'sedikit', 'cukup', 'lumayan'
+]
+
+# Emphasis words (penekanan - boost negation)
+EMPHASIS_WORDS = [
+    'sama sekali', 'sangat', 'sekali', 'banget', 'amat',
+    'betul-betul', 'sungguh', 'benar-benar'
+]

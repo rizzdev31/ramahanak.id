@@ -1,0 +1,241 @@
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+
+class NegationCounterpartSeeder extends Seeder
+{
+    /**
+     * Seed negation counterpart mapping
+     * 
+     * ✅ SINKRONISASI DENGAN DATA EXISTING
+     * ✅ UPDATE existing records, TIDAK create duplicate
+     */
+    public function run(): void
+    {
+        $this->command->info('🔄 Syncing negation counterpart mapping...');
+        
+        // ══════════════════════════════════════════════════════════
+        // STEP 1: Update EXISTING Pelanggaran dengan negation support
+        // ══════════════════════════════════════════════════════════
+        
+        $this->updateExistingPelanggaran();
+        
+        // ══════════════════════════════════════════════════════════
+        // STEP 2: Update EXISTING Apresiasi dengan negation support
+        // ══════════════════════════════════════════════════════════
+        
+        $this->updateExistingApresiasi();
+        
+        // ══════════════════════════════════════════════════════════
+        // STEP 3: Create NEW counterpart variabel (if not exist)
+        // ══════════════════════════════════════════════════════════
+        
+        $this->createCounterpartApresiasi();
+        $this->createCounterpartPelanggaran();
+        
+        $this->command->info('✅ Negation counterpart mapping completed!');
+    }
+    
+    /**
+     * Update EXISTING Pelanggaran records dengan negation support
+     */
+    private function updateExistingPelanggaran(): void
+    {
+        $updates = [
+            // P002: Telat → A101 (Disiplin Waktu)
+            [
+                'kode' => 'P002',
+                'negatable' => true,
+                'counterpart_kode' => 'A101',
+                'negation_notes' => 'Kata "telat, terlambat, ngaret" bisa di-negasi → flip ke A101 (Disiplin Waktu)'
+            ],
+            
+            // P003: Kotor → A103 (Kebersihan)
+            [
+                'kode' => 'P003',
+                'negatable' => true,
+                'counterpart_kode' => 'A103',
+                'negation_notes' => 'Kata "kotor, jorok" bisa di-negasi → flip ke A103 (Kebersihan)'
+            ],
+            
+            // P005: Bolos → A102 (Kehadiran Penuh)
+            [
+                'kode' => 'P005',
+                'negatable' => true,
+                'counterpart_kode' => 'A102',
+                'negation_notes' => 'Kata "bolos, membolos, mangkir" bisa di-negasi → flip ke A102 (Kehadiran Penuh)'
+            ],
+        ];
+        
+        foreach ($updates as $update) {
+            DB::table('variabel_pelanggaran')
+                ->where('kode', $update['kode'])
+                ->update([
+                    'negatable' => $update['negatable'],
+                    'counterpart_kode' => $update['counterpart_kode'],
+                    'negation_notes' => $update['negation_notes'],
+                    'updated_at' => now()
+                ]);
+        }
+        
+        $this->command->info('  ✓ Updated ' . count($updates) . ' existing Pelanggaran records');
+    }
+    
+    /**
+     * Update EXISTING Apresiasi records dengan negation support
+     */
+    private function updateExistingApresiasi(): void
+    {
+        $updates = [
+            // A001: Membantu → P101 (Tidak Membantu)
+            [
+                'kode' => 'A001',
+                'negatable' => true,
+                'counterpart_kode' => 'P101',
+                'negation_notes' => 'Kata "bantu, membantu, menolong" bisa di-negasi → flip ke P101 (Tidak Membantu)'
+            ],
+        ];
+        
+        foreach ($updates as $update) {
+            DB::table('variabel_apresiasi')
+                ->where('kode', $update['kode'])
+                ->update([
+                    'negatable' => $update['negatable'],
+                    'counterpart_kode' => $update['counterpart_kode'],
+                    'negation_notes' => $update['negation_notes'],
+                    'updated_at' => now()
+                ]);
+        }
+        
+        $this->command->info('  ✓ Updated ' . count($updates) . ' existing Apresiasi records');
+    }
+    
+    /**
+     * Create NEW Apresiasi counterparts (jika belum ada)
+     */
+    private function createCounterpartApresiasi(): void
+    {
+        $newApresiasi = [
+            // A101: Disiplin Waktu (counterpart P002)
+            [
+                'kode' => 'A101',
+                'kategori' => 'Disiplin Waktu',
+                'poin' => 10,
+                'apresiasi' => 'Apresiasi Ucapan dan Validasi atas kedisiplinan waktu',
+                'kamus_kata' => 'tepat,waktu,disiplin,ontime,punctual,tidak,telat,tidak,terlambat',
+                'negatable' => true,
+                'counterpart_kode' => 'P002',
+                'negation_notes' => 'Counterpart untuk "tidak telat" → P002'
+            ],
+            
+            // A102: Kehadiran Penuh (counterpart P005)
+            [
+                'kode' => 'A102',
+                'kategori' => 'Kehadiran Penuh',
+                'poin' => 15,
+                'apresiasi' => 'Apresiasi atas kehadiran penuh dan komitmen belajar',
+                'kamus_kata' => 'hadir,masuk,ikut,mengikuti,rajin,tidak,bolos,tidak,mangkir',
+                'negatable' => true,
+                'counterpart_kode' => 'P005',
+                'negation_notes' => 'Counterpart untuk "tidak bolos" → P005'
+            ],
+            
+            // A103: Kebersihan (counterpart P003)
+            [
+                'kode' => 'A103',
+                'kategori' => 'Kebersihan',
+                'poin' => 8,
+                'apresiasi' => 'Apresiasi atas menjaga kebersihan diri dan lingkungan',
+                'kamus_kata' => 'bersih,rapi,wangi,terawat,tidak,kotor,tidak,jorok',
+                'negatable' => true,
+                'counterpart_kode' => 'P003',
+                'negation_notes' => 'Counterpart untuk "tidak kotor" → P003'
+            ],
+        ];
+        
+        $created = 0;
+        foreach ($newApresiasi as $data) {
+            // Check if already exists
+            $exists = DB::table('variabel_apresiasi')
+                ->where('kode', $data['kode'])
+                ->exists();
+            
+            if (!$exists) {
+                DB::table('variabel_apresiasi')->insert(
+                    $data + ['created_at' => now(), 'updated_at' => now()]
+                );
+                $created++;
+            } else {
+                // Update negation fields only
+                DB::table('variabel_apresiasi')
+                    ->where('kode', $data['kode'])
+                    ->update([
+                        'negatable' => $data['negatable'],
+                        'counterpart_kode' => $data['counterpart_kode'],
+                        'negation_notes' => $data['negation_notes'],
+                        'updated_at' => now()
+                    ]);
+            }
+        }
+        
+        if ($created > 0) {
+            $this->command->info('  ✓ Created ' . $created . ' new Apresiasi counterparts');
+        } else {
+            $this->command->info('  ✓ All Apresiasi counterparts already exist (updated negation fields)');
+        }
+    }
+    
+    /**
+     * Create NEW Pelanggaran counterparts (jika belum ada)
+     */
+    private function createCounterpartPelanggaran(): void
+    {
+        $newPelanggaran = [
+            // P101: Tidak Membantu (counterpart A001)
+            [
+                'kode' => 'P101',
+                'kategori' => 'Tidak Membantu',
+                'poin' => 5,
+                'tindakan' => 'Tanggung jawab membantu teman selama 1 minggu',
+                'kamus_kata' => 'egois,cuek,acuh,tidak,peduli,tidak,bantu,tidak,menolong',
+                'negatable' => true,
+                'counterpart_kode' => 'A001',
+                'negation_notes' => 'Counterpart untuk "tidak membantu" → A001'
+            ],
+        ];
+        
+        $created = 0;
+        foreach ($newPelanggaran as $data) {
+            // Check if already exists
+            $exists = DB::table('variabel_pelanggaran')
+                ->where('kode', $data['kode'])
+                ->exists();
+            
+            if (!$exists) {
+                DB::table('variabel_pelanggaran')->insert(
+                    $data + ['created_at' => now(), 'updated_at' => now()]
+                );
+                $created++;
+            } else {
+                // Update negation fields only
+                DB::table('variabel_pelanggaran')
+                    ->where('kode', $data['kode'])
+                    ->update([
+                        'negatable' => $data['negatable'],
+                        'counterpart_kode' => $data['counterpart_kode'],
+                        'negation_notes' => $data['negation_notes'],
+                        'updated_at' => now()
+                    ]);
+            }
+        }
+        
+        if ($created > 0) {
+            $this->command->info('  ✓ Created ' . $created . ' new Pelanggaran counterparts');
+        } else {
+            $this->command->info('  ✓ All Pelanggaran counterparts already exist (updated negation fields)');
+        }
+    }
+}

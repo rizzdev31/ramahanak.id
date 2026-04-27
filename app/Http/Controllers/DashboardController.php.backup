@@ -1,0 +1,205 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use App\Models\Kelas;
+use App\Models\PenugasanKelas;
+use App\Models\RiwayatKelasSantri;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
+
+class DashboardController extends Controller
+{
+    public function index()
+    {
+        $user = Auth::user()->load([
+            'guruBkProfile',
+            'tenagaPendidikProfile',
+            'santriProfile.kelas',
+        ]);
+
+        $role = $user->role;
+
+        // ── Data berdasarkan role ───────────────────────────────
+        $dashboardData = match ($role) {
+            'guru_bk'         => $this->dataGuruBk($user),
+            'tenaga_pendidik' => $this->dataTenagaPendidik($user),
+            'santri'          => $this->dataSantri($user),
+            default           => [],
+        };
+
+        return Inertia::render('Dashboard', [
+            'dashboardData' => $dashboardData,
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // DATA GURU BK — statistik global + user pending
+    // ─────────────────────────────────────────────────────────────
+    private function dataGuruBk($user): array
+    {
+        $profile = $user->guruBkProfile;
+
+        // Statistik global
+        $totalSantri      = User::where('role', 'santri')->where('status', 'active')->count();
+        $totalKelas       = Kelas::where('status', 'active')->where('kode_kelas', '!=', 'PENDING')->count();
+        $totalTenagaPendidik = User::whereIn('role', ['guru_bk', 'tenaga_pendidik'])->where('status', 'active')->count();
+        $santriPending    = User::where('role', 'santri')->where('status', 'pending')->count();
+        $userPending      = User::where('status', 'pending')->count();
+
+        // Kelas yang belum punya wali kelas
+        $kelasKosong = Kelas::where('status', 'active')
+            ->where('kode_kelas', '!=', 'PENDING')
+            ->whereDoesntHave('penugasanAktif', fn($q) =>
+                $q->where('jenis_penugasan', 'wali_kelas')
+            )
+            ->count();
+
+        // Daftar user pending terbaru (maks 5)
+        $userPendingList = User::where('status', 'pending')
+            ->with(['guruBkProfile', 'tenagaPendidikProfile', 'santriProfile'])
+            ->latest()
+            ->take(5)
+            ->get()
+            ->map(fn($u) => [
+                'id'       => $u->id,
+                'username' => $u->username,
+                'email'    => $u->email,
+                'role'     => $u->role,
+                'nama'     => $u->guruBkProfile?->nama_lengkap
+                           ?? $u->tenagaPendidikProfile?->nama_lengkap
+                           ?? $u->santriProfile?->nama_lengkap
+                           ?? '-',
+            ]);
+
+        return [
+            'role'    => 'guru_bk',
+            'nama'    => $profile?->nama_lengkap ?? $user->username,
+            'jabatan' => $profile?->jabatan ?? 'Guru BK',
+            'foto'    => $profile?->foto ? "/storage/{$profile->foto}" : null,
+            'stats'   => [
+                ['label' => 'Total Santri Aktif',      'value' => $totalSantri,         'color' => 'blue',   'icon' => 'users'],
+                ['label' => 'Total Kelas Aktif',        'value' => $totalKelas,          'color' => 'green',  'icon' => 'kelas'],
+                ['label' => 'Tenaga Pendidik',          'value' => $totalTenagaPendidik, 'color' => 'purple', 'icon' => 'staff'],
+                ['label' => 'Menunggu Persetujuan',     'value' => $userPending,         'color' => 'yellow', 'icon' => 'pending'],
+                ['label' => 'Kelas Belum Ada Wali',     'value' => $kelasKosong,         'color' => 'red',    'icon' => 'warning'],
+            ],
+            'userPendingList' => $userPendingList,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // DATA TENAGA PENDIDIK — kelas yang diampu
+    // ─────────────────────────────────────────────────────────────
+    private function dataTenagaPendidik($user): array
+    {
+        $profile = $user->tenagaPendidikProfile;
+
+        // Penugasan aktif user ini
+        $penugasan = PenugasanKelas::where('user_id', $user->id)
+            ->where('is_active', 1)
+            ->with(['kelas.santri'])
+            ->get()
+            ->map(fn($p) => [
+                'kelas_id'    => $p->kelas_id,
+                'kelas_nama'  => $p->kelas?->nama_lengkap ?? '-',
+                'kelas_kode'  => $p->kelas?->kode_kelas ?? '-',
+                'jenis'       => $p->jenis_penugasan,
+                'jenis_label' => $p->jenis_penugasan === 'wali_kelas' ? 'Wali Kelas' : 'Wali Asrama',
+                'jml_santri'  => $p->kelas?->santri?->count() ?? 0,
+            ]);
+
+        return [
+            'role'      => 'tenaga_pendidik',
+            'nama'      => $profile?->nama_lengkap ?? $user->username,
+            'jabatan'   => $profile?->jabatan ?? 'Tenaga Pendidik',
+            'foto'      => $profile?->foto ? "/storage/{$profile->foto}" : null,
+            'penugasan' => $penugasan,
+            'stats'     => [
+                ['label' => 'Kelas Ditugaskan', 'value' => $penugasan->count(), 'color' => 'blue'],
+                ['label' => 'Sebagai Wali Kelas',  'value' => $penugasan->where('jenis', 'wali_kelas')->count(),  'color' => 'green'],
+                ['label' => 'Sebagai Wali Asrama', 'value' => $penugasan->where('jenis', 'wali_asrama')->count(), 'color' => 'purple'],
+            ],
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // DATA SANTRI — info kelas + riwayat
+    // ─────────────────────────────────────────────────────────────
+    private function dataSantri($user): array
+    {
+        $profile = $user->santriProfile?->load([
+            'kelas.penugasanAktif.user.guruBkProfile',
+            'kelas.penugasanAktif.user.tenagaPendidikProfile',
+        ]);
+
+        $kelas = $profile?->kelas;
+        $isPending = $kelas?->kode_kelas === 'PENDING';
+
+        // Wali kelas di kelas santri ini
+        $waliKelas = null;
+        $waliAsrama = [];
+        if ($kelas && !$isPending) {
+            $wk = $kelas->penugasanAktif
+                ->where('jenis_penugasan', 'wali_kelas')
+                ->first();
+            if ($wk) {
+                $waliKelas = [
+                    'nama' => $wk->user->guruBkProfile?->nama_lengkap
+                           ?? $wk->user->tenagaPendidikProfile?->nama_lengkap
+                           ?? '-',
+                    'foto' => $wk->user->guruBkProfile?->foto
+                           ?? $wk->user->tenagaPendidikProfile?->foto,
+                ];
+                if ($waliKelas['foto']) {
+                    $waliKelas['foto'] = "/storage/{$waliKelas['foto']}";
+                }
+            }
+
+            $waliAsrama = $kelas->penugasanAktif
+                ->where('jenis_penugasan', 'wali_asrama')
+                ->map(fn($w) => [
+                    'nama' => $w->user->guruBkProfile?->nama_lengkap
+                           ?? $w->user->tenagaPendidikProfile?->nama_lengkap
+                           ?? '-',
+                    'foto' => $w->user->guruBkProfile?->foto
+                           ?? $w->user->tenagaPendidikProfile?->foto
+                           ? "/storage/".($w->user->guruBkProfile?->foto ?? $w->user->tenagaPendidikProfile?->foto)
+                           : null,
+                ])->values()->toArray();
+        }
+
+        // Riwayat kelas (maks 5 terakhir)
+        $riwayat = RiwayatKelasSantri::where('user_id', $user->id)
+            ->with('kelas')
+            ->orderByDesc('tanggal_masuk')
+            ->take(5)
+            ->get()
+            ->map(fn($r) => [
+                'kelas_nama'     => $r->kelas?->nama_lengkap ?? '-',
+                'tahun_ajaran'   => $r->tahun_ajaran,
+                'tanggal_masuk'  => $r->tanggal_masuk?->format('d M Y'),
+                'tanggal_keluar' => $r->tanggal_keluar?->format('d M Y'),
+                'is_active'      => $r->is_active,
+                'keterangan'     => $r->keterangan,
+            ]);
+
+        return [
+            'role'        => 'santri',
+            'nama'        => $profile?->nama_lengkap ?? $user->username,
+            'nisn'        => $profile?->nisn ?? '-',
+            'foto'        => $profile?->foto ? "/storage/{$profile->foto}" : null,
+            'is_pending'  => $isPending,
+            'kelas'       => $kelas && !$isPending ? [
+                'nama'         => $kelas->nama_lengkap,
+                'kode'         => $kelas->kode_kelas,
+                'tahun_ajaran' => $kelas->tahun_ajaran,
+            ] : null,
+            'wali_kelas'  => $waliKelas,
+            'wali_asrama' => $waliAsrama,
+            'riwayat'     => $riwayat,
+        ];
+    }
+}

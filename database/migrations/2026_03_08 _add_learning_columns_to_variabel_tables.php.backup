@@ -1,0 +1,113 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     * 
+     * ✨ ADD LEARNING TRACKING COLUMNS
+     * Menambahkan kolom untuk tracking pembelajaran di variabel tables
+     */
+    public function up(): void
+    {
+        // ══════════════════════════════════════════════════════════
+        // VARIABEL PELANGGARAN
+        // ══════════════════════════════════════════════════════════
+        Schema::table('variabel_pelanggaran', function (Blueprint $table) {
+            $table->json('auto_learned_keywords')
+                ->nullable()
+                ->after('negation_notes')
+                ->comment('Keywords yang ditambahkan otomatis dari learning');
+            
+            $table->timestamp('last_learned_at')
+                ->nullable()
+                ->after('auto_learned_keywords')
+                ->comment('Terakhir kali learning terjadi');
+            
+            $table->integer('learning_count')
+                ->default(0)
+                ->after('last_learned_at')
+                ->comment('Jumlah total pembelajaran');
+            
+            $table->decimal('learning_accuracy', 5, 2)
+                ->default(0.00)
+                ->after('learning_count')
+                ->comment('Accuracy rate dari pembelajaran (%)');
+        });
+
+        // ══════════════════════════════════════════════════════════
+        // VARIABEL APRESIASI
+        // ══════════════════════════════════════════════════════════
+        Schema::table('variabel_apresiasi', function (Blueprint $table) {
+            $table->json('auto_learned_keywords')
+                ->nullable()
+                ->after('negation_notes')
+                ->comment('Keywords yang ditambahkan otomatis dari learning');
+            
+            $table->timestamp('last_learned_at')
+                ->nullable()
+                ->after('auto_learned_keywords')
+                ->comment('Terakhir kali learning terjadi');
+            
+            $table->integer('learning_count')
+                ->default(0)
+                ->after('last_learned_at')
+                ->comment('Jumlah total pembelajaran');
+            
+            $table->decimal('learning_accuracy', 5, 2)
+                ->default(0.00)
+                ->after('learning_count')
+                ->comment('Accuracy rate dari pembelajaran (%)');
+        });
+
+        // ══════════════════════════════════════════════════════════
+        // VARIABEL KONSELOR (Tracking only, no auto-learning)
+        // ══════════════════════════════════════════════════════════
+        Schema::table('variabel_konselor', function (Blueprint $table) {
+            $table->integer('manual_correction_count')
+                ->default(0)
+                ->after('rekomendasi')
+                ->comment('Jumlah koreksi manual (for monitoring, not auto-learning)');
+            
+            $table->timestamp('last_corrected_at')
+                ->nullable()
+                ->after('manual_correction_count')
+                ->comment('Terakhir kali dikoreksi manual');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('variabel_pelanggaran', function (Blueprint $table) {
+            $table->dropColumn([
+                'auto_learned_keywords',
+                'last_learned_at',
+                'learning_count',
+                'learning_accuracy'
+            ]);
+        });
+
+        Schema::table('variabel_apresiasi', function (Blueprint $table) {
+            $table->dropColumn([
+                'auto_learned_keywords',
+                'last_learned_at',
+                'learning_count',
+                'learning_accuracy'
+            ]);
+        });
+
+        Schema::table('variabel_konselor', function (Blueprint $table) {
+            $table->dropColumn([
+                'manual_correction_count',
+                'last_corrected_at'
+            ]);
+        });
+    }
+};

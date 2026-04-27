@@ -1,0 +1,90 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('laporan_expert_system_point', function (Blueprint $table) {
+            $table->id();
+            
+            // ═══════════════════════════════════════════════════════════
+            // Relasi
+            // ═══════════════════════════════════════════════════════════
+            $table->unsignedBigInteger('santri_id')->comment('Santri yang mendapat konsekuensi/reward');
+            $table->foreign('santri_id')->references('id')->on('users')->cascadeOnDelete();
+            
+            // ═══════════════════════════════════════════════════════════
+            // Jenis & Kode
+            // ═══════════════════════════════════════════════════════════
+            $table->enum('jenis', ['konsekuensi', 'reward'])->comment('Jenis laporan');
+            $table->string('kode', 10)->comment('K001 atau R001');
+            
+            // ═══════════════════════════════════════════════════════════
+            // Data Threshold (gunakan 'poin' untuk konsistensi dengan variabel)
+            // ═══════════════════════════════════════════════════════════
+            $table->integer('total_poin_saat_trigger')->comment('Total poin santri saat threshold tercapai');
+            $table->integer('threshold_poin_triggered')->comment('Nilai threshold yang di-trigger (snapshot dari variabel.poin)');
+            
+            // ═══════════════════════════════════════════════════════════
+            // Data Konsekuensi/Reward (Snapshot dari Variabel)
+            // ═══════════════════════════════════════════════════════════
+            $table->string('konsekuensi_atau_reward')->comment('Nama konsekuensi/reward (snapshot dari variabel)');
+            $table->text('rekomendasi')->comment('Rekomendasi tindakan (snapshot dari variabel - PANDUAN SISTEM)');
+            
+            // ═══════════════════════════════════════════════════════════
+            // Input BK
+            // ═══════════════════════════════════════════════════════════
+            $table->text('catatan_bk')->nullable()->comment('Catatan/analisis BK tentang santri (WAJIB diisi sebelum complete, tapi bisa kosong saat auto-create)');
+            $table->text('aksi_bk')->nullable()->comment('Tindakan konkret yang dilakukan BK (OPTIONAL, untuk dokumentasi)');
+            
+            // ═══════════════════════════════════════════════════════════
+            // Status & Workflow
+            // ═══════════════════════════════════════════════════════════
+            $table->enum('status', ['pending', 'diproses', 'selesai'])->default('pending');
+            
+            // ═══════════════════════════════════════════════════════════
+            // Timestamps
+            // ═══════════════════════════════════════════════════════════
+            $table->timestamp('tanggal_trigger')->useCurrent()->comment('Kapan threshold tercapai (auto)');
+            $table->timestamp('tanggal_selesai')->nullable()->comment('Kapan BK complete laporan');
+            
+            // ═══════════════════════════════════════════════════════════
+            // Validator (BK)
+            // ═══════════════════════════════════════════════════════════
+            $table->unsignedBigInteger('validated_by')->nullable()->comment('BK yang complete');
+            $table->foreign('validated_by')->references('id')->on('users')->nullOnDelete();
+            
+            // ═══════════════════════════════════════════════════════════
+            // PDF File
+            // ═══════════════════════════════════════════════════════════
+            $table->string('pdf_path')->nullable()->comment('Path file PDF rekam medis');
+            
+            $table->timestamps();
+            
+            // ═══════════════════════════════════════════════════════════
+            // Indexes
+            // ═══════════════════════════════════════════════════════════
+            $table->index('santri_id');
+            $table->index('jenis');
+            $table->index('kode');
+            $table->index('status');
+            $table->index('tanggal_trigger');
+            $table->index(['santri_id', 'jenis', 'status']); // Composite index
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('laporan_expert_system_point');
+    }
+};

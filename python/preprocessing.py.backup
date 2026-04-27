@@ -1,0 +1,382 @@
+#!/usr/bin/env python3
+"""
+PREPROCESSING SYSTEM - STANDALONE VERSION
+All-in-one: No external module dependencies
+"""
+
+import argparse
+import json
+import sys
+import re
+from datetime import datetime
+
+# Import hanya yang PASTI ada
+from database import get_db
+from ner import get_ner
+from config import TRANSITIVE_VERBS
+
+try:
+    from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
+    STEMMER = StemmerFactory().create_stemmer()
+except ImportError:
+    print("✗ Warning: Sastrawi not installed. Stemming disabled.", file=sys.stderr)
+    STEMMER = None
+
+
+# ══════════════════════════════════════════════════════════
+# TEXT CLEANING (Inline)
+# ══════════════════════════════════════════════════════════
+
+def clean_text(text):
+    """Clean and normalize text"""
+    if not text:
+        return ""
+    
+    # Lowercase
+    text = text.lower()
+    
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Strip
+    text = text.strip()
+    
+    return text
+
+
+# ══════════════════════════════════════════════════════════
+# TOKENIZATION (Inline)
+# ══════════════════════════════════════════════════════════
+
+def tokenize(text):
+    """Simple word tokenization"""
+    if not text:
+        return []
+    
+    # Split by whitespace
+    tokens = text.split()
+    
+    # Remove empty tokens
+    tokens = [t for t in tokens if t.strip()]
+    
+    return tokens
+
+
+# ══════════════════════════════════════════════════════════
+# STOPWORD REMOVAL (Inline)
+# ══════════════════════════════════════════════════════════
+
+INDONESIAN_STOPWORDS = {
+    'yang', 'untuk', 'pada', 'ke', 'para', 'namun', 'menurut', 
+    'antara', 'dia', 'dua', 'ia', 'seperti', 'jika', 'jika', 
+    'sehingga', 'kembali', 'dan', 'tidak', 'ini', 'karena', 
+    'oleh', 'tapi', 'dengan', 'bahwa', 'juga', 'dari', 'dalam', 
+    'itu', 'bisa', 'ada', 'akan', 'atau', 'adalah'
+}
+
+def remove_stopwords(tokens):
+    """Remove stopwords from tokens"""
+    if not tokens:
+        return []
+    
+    filtered = [t for t in tokens if t.lower() not in INDONESIAN_STOPWORDS]
+    return filtered
+
+
+# ══════════════════════════════════════════════════════════
+# STEMMING (Inline)
+# ══════════════════════════════════════════════════════════
+
+def stem_tokens(tokens):
+    """Stem tokens using Sastrawi"""
+    if not tokens:
+        return []
+    
+    if STEMMER is None:
+        # Fallback: return original tokens
+        return tokens
+    
+    stemmed = [STEMMER.stem(token) for token in tokens]
+    return stemmed
+
+
+# ══════════════════════════════════════════════════════════
+# KODE MATCHING
+# ══════════════════════════════════════════════════════════
+
+def match_kode_variabel(text_original, tokens_stemmed, db):
+    """
+    Match text dengan variabel dari database
+    """
+    matched_kode = []
+    
+    try:
+        # Get all variabel kata from database
+        all_kata = db.get_all_variabel_kata()
+        
+        if not all_kata:
+            print("✗ No variabel kata loaded from database", file=sys.stderr)
+            return []
+        
+        # Create lowercase versions for matching
+        text_lower = text_original.lower()
+        tokens_lower = [t.lower() for t in tokens_stemmed]
+        
+        # Track matched kode (avoid duplicates)
+        matched_kode_set = set()
+        
+        # Match each variabel kata
+        for item in all_kata:
+            kata = item['kata'].lower().strip()
+            kode = item['kode']
+            kategori = item.get('kategori', 'unknown')
+            
+            if not kata:
+                continue
+            
+            # Check if kata appears in text or tokens
+            if kata in text_lower or kata in tokens_lower:
+                if kode not in matched_kode_set:
+                    matched_kode_set.add(kode)
+                    print(f"✓ Matched '{kata}' → {kode} ({kategori})", file=sys.stderr)
+        
+        matched_kode = sorted(list(matched_kode_set))
+        
+        if matched_kode:
+            print(f"✓ Total matched kode: {len(matched_kode)} → {matched_kode}", file=sys.stderr)
+        else:
+            print("✗ No kode matched", file=sys.stderr)
+        
+        return matched_kode
+        
+    except Exception as e:
+        print(f"✗ Error in match_kode_variabel: {e}", file=sys.stderr)
+        return []
+
+
+def categorize_kode(kode_list):
+    """Categorize kode by type"""
+    result = {
+        'pelanggaran': [],
+        'apresiasi': [],
+        'konselor': []
+    }
+    
+    for kode in kode_list:
+        if kode.startswith('P'):
+            result['pelanggaran'].append(kode)
+        elif kode.startswith('A'):
+            result['apresiasi'].append(kode)
+        elif kode.startswith('K'):
+            result['konselor'].append(kode)
+    
+    return result
+
+
+# ══════════════════════════════════════════════════════════
+# MAIN PREPROCESSING
+# ══════════════════════════════════════════════════════════
+
+def preprocess_laporan(laporan_id, save_to_db=False):
+    """
+    Main preprocessing function
+    """
+    db = None
+    
+    try:
+        # ══════════════════════════════════════════════════════════
+        # STEP 1: Connect to database & get laporan
+        # ══════════════════════════════════════════════════════════
+        db = get_db()
+        laporan = db.get_laporan_awal(laporan_id)
+        
+        if not laporan:
+            error_result = {
+                'status': 'error',
+                'error': f'Laporan {laporan_id} not found',
+                'laporan_id': laporan_id
+            }
+            print(json.dumps(error_result, ensure_ascii=False))
+            return error_result
+        
+        text_original = laporan['text_laporan']
+        
+        # ══════════════════════════════════════════════════════════
+        # STEP 2: Text Cleaning
+        # ══════════════════════════════════════════════════════════
+        text_cleaned = clean_text(text_original)
+        
+        # ══════════════════════════════════════════════════════════
+        # STEP 3: Tokenization
+        # ══════════════════════════════════════════════════════════
+        tokens = tokenize(text_cleaned)
+        
+        # ══════════════════════════════════════════════════════════
+        # STEP 4: Stopword Removal
+        # ══════════════════════════════════════════════════════════
+        tokens_no_stopwords = remove_stopwords(tokens)
+        
+        # ══════════════════════════════════════════════════════════
+        # STEP 5: Stemming
+        # ══════════════════════════════════════════════════════════
+        tokens_stemmed = stem_tokens(tokens_no_stopwords)
+        
+        # ══════════════════════════════════════════════════════════
+        # STEP 6: Named Entity Recognition (NER)
+        # ══════════════════════════════════════════════════════════
+        ner = get_ner()
+        entities = ner.extract_entities(text_original, tokens_stemmed)
+        
+        # Validate with database
+        entities_validated = ner.validate_with_database(entities, db)
+        
+        # ══════════════════════════════════════════════════════════
+        # STEP 7: Kode Matching
+        # ══════════════════════════════════════════════════════════
+        kode_matched = match_kode_variabel(text_original, tokens_stemmed, db)
+        kode_by_type = categorize_kode(kode_matched)
+        
+        # ══════════════════════════════════════════════════════════
+        # STEP 8: Build Result
+        # ══════════════════════════════════════════════════════════
+        preprocessing_data = {
+            'original': text_original,
+            'case_folding': text_cleaned,
+            'cleaning': text_cleaned,
+            'tokens': tokens,
+            'no_stopwords': tokens_no_stopwords,
+            'stemmed': tokens_stemmed,
+        }
+        
+        result = {
+            'status': 'success',
+            'laporan_id': laporan_id,
+            'jenis_laporan': laporan['jenis_laporan'],
+            'kode_matched': kode_matched,
+            'kode_pelanggaran': kode_by_type['pelanggaran'],
+            'kode_apresiasi': kode_by_type['apresiasi'],
+            'kode_konselor': kode_by_type['konselor'],
+            'pelaku_nama': entities_validated.get('pelaku_nama'),
+            'pelaku_santri_id': entities_validated.get('pelaku_santri_id'),
+            'korban_nama': entities_validated.get('korban_nama'),
+            'korban_santri_id': entities_validated.get('korban_santri_id'),
+            'kata_kerja_dasar': entities_validated.get('kata_kerja_dasar'),
+            'preprocessing_data': preprocessing_data,
+            'timestamp': datetime.now().isoformat(),
+        }
+        
+        # ══════════════════════════════════════════════════════════
+        # STEP 9: Save to Database (if requested)
+        # ══════════════════════════════════════════════════════════
+        if save_to_db:
+            hasil_id = db.save_hasil_preprocessing(result)
+            result['hasil_preprocessing_id'] = hasil_id
+            result['saved_to_db'] = True
+        else:
+            result['saved_to_db'] = False
+        
+        # ══════════════════════════════════════════════════════════
+        # STEP 10: Output JSON
+        # ══════════════════════════════════════════════════════════
+        json_output = json.dumps(result, ensure_ascii=False, indent=2)
+        print(json_output)
+        sys.stdout.flush()  # ✅ CRITICAL: Force flush to prevent truncation
+        
+        return result
+        
+    except Exception as e:
+        # ══════════════════════════════════════════════════════════
+        # ERROR HANDLING - Always return JSON!
+        # ══════════════════════════════════════════════════════════
+        import traceback
+        error_trace = traceback.format_exc()
+        
+        print(f"✗ FATAL ERROR: {e}", file=sys.stderr)
+        print(error_trace, file=sys.stderr)
+        
+        error_result = {
+            'status': 'error',
+            'error': str(e),
+            'error_trace': error_trace,
+            'laporan_id': laporan_id,
+            'timestamp': datetime.now().isoformat(),
+        }
+        
+        # ✅ CRITICAL: Always output JSON even on error!
+        json_output = json.dumps(error_result, ensure_ascii=False, indent=2)
+        print(json_output)
+        sys.stdout.flush()  # ✅ Force flush
+        
+        # Try to save error to database
+        if save_to_db and db:
+            try:
+                error_data = {
+                    'laporan_id': laporan_id,
+                    'kode_matched': [],
+                    'pelaku_nama': None,
+                    'pelaku_santri_id': None,
+                    'korban_nama': None,
+                    'korban_santri_id': None,
+                    'kata_kerja_dasar': None,
+                    'preprocessing_data': {'error': str(e)},
+                    'error_message': str(e),
+                }
+                db.save_hasil_preprocessing(error_data)
+            except:
+                pass  # Ignore save error
+        
+        return error_result
+        
+    finally:
+        # ══════════════════════════════════════════════════════════
+        # CLEANUP: Always close database
+        # ══════════════════════════════════════════════════════════
+        if db:
+            try:
+                db.close()
+            except:
+                pass  # Ignore close error
+
+
+def main():
+    """CLI Entry Point"""
+    parser = argparse.ArgumentParser(
+        description='Preprocessing System for Laporan Awal'
+    )
+    
+    parser.add_argument(
+        '--laporan_id',
+        type=int,
+        required=True,
+        help='ID of laporan_awal to process'
+    )
+    
+    parser.add_argument(
+        '--save-to-db',
+        action='store_true',
+        help='Save hasil preprocessing to database'
+    )
+    
+    parser.add_argument(
+        '--pretty',
+        action='store_true',
+        help='Pretty print JSON output'
+    )
+    
+    args = parser.parse_args()
+    
+    # Run preprocessing
+    result = preprocess_laporan(
+        laporan_id=args.laporan_id,
+        save_to_db=args.save_to_db
+    )
+    
+    # Exit with appropriate code
+    if result.get('status') == 'success':
+        sys.exit(0)
+    else:
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

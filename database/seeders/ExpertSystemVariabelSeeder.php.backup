@@ -1,0 +1,119 @@
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+
+class ExpertSystemVariabelSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
+    {
+        // ═══════════════════════════════════════════════════════════
+        // VARIABEL KONSEKUENSI (Threshold Poin Pelanggaran)
+        // ═══════════════════════════════════════════════════════════
+        $konsekuensi = [
+            [
+                'kode' => 'K001',
+                'poin' => 30,
+                'konsekuensi' => 'Peringatan Tertulis',
+                'rekomendasi' => 'Panggil santri untuk pembinaan ringan. Berikan peringatan tertulis dan catat dalam buku pembinaan.',
+                'is_active' => true,
+            ],
+            [
+                'kode' => 'K002',
+                'poin' => 50,
+                'konsekuensi' => 'Panggil Orang Tua',
+                'rekomendasi' => 'Panggil orang tua/wali santri untuk diberitahu perkembangan perilaku santri. Buat komitmen perbaikan bersama.',
+                'is_active' => true,
+            ],
+            [
+                'kode' => 'K003',
+                'poin' => 75,
+                'konsekuensi' => 'Skorsing 3 Hari',
+                'rekomendasi' => 'Skorsing 3 hari untuk memberikan ruang refleksi. Santri wajib mengikuti bimbingan konseling selama skorsing.',
+                'is_active' => true,
+            ],
+            [
+                'kode' => 'K004',
+                'poin' => 100,
+                'konsekuensi' => 'Skorsing 1 Minggu',
+                'rekomendasi' => 'Skorsing 1 minggu dengan konseling intensif. Evaluasi perkembangan setiap 2 hari. Orang tua wajib hadir.',
+                'is_active' => true,
+            ],
+            [
+                'kode' => 'K005',
+                'poin' => 150,
+                'konsekuensi' => 'Skorsing 2 Minggu + Terapi',
+                'rekomendasi' => 'Skorsing 2 minggu dengan terapi psikologis. Rujukan ke psikolog profesional. Orang tua dilibatkan penuh.',
+                'is_active' => true,
+            ],
+            [
+                'kode' => 'K006',
+                'poin' => 200,
+                'konsekuensi' => 'Pertimbangan Pengembalian ke Orang Tua',
+                'rekomendasi' => 'Rapat pleno dengan kepala sekolah, BK, dan wali kelas untuk mempertimbangkan pengembalian santri ke orang tua.',
+                'is_active' => true,
+            ],
+        ];
+
+        // ═══════════════════════════════════════════════════════════
+        // VARIABEL REWARD (Threshold Poin Apresiasi)
+        // ═══════════════════════════════════════════════════════════
+        $reward = [
+            [
+                'kode' => 'R001',
+                'poin' => 30,
+                'reward' => 'Piagam Penghargaan',
+                'rekomendasi' => 'Berikan piagam penghargaan sebagai motivasi. Umumkan di kelas untuk apresiasi sosial.',
+                'is_active' => true,
+            ],
+            [
+                'kode' => 'R002',
+                'poin' => 50,
+                'reward' => 'Sertifikat + Hadiah Kecil',
+                'rekomendasi' => 'Sertifikat prestasi ditambah hadiah berupa alat tulis atau buku. Pengumuman di upacara bendera.',
+                'is_active' => true,
+            ],
+            [
+                'kode' => 'R003',
+                'poin' => 75,
+                'reward' => 'Penghargaan dari Kepala Sekolah',
+                'rekomendasi' => 'Penghargaan langsung dari kepala sekolah dalam upacara khusus. Undang orang tua untuk hadir.',
+                'is_active' => true,
+            ],
+            [
+                'kode' => 'R004',
+                'poin' => 100,
+                'reward' => 'Beasiswa Parsial (25%)',
+                'rekomendasi' => 'Beasiswa parsial 25% untuk semester berikutnya sebagai apresiasi prestasi konsisten.',
+                'is_active' => true,
+            ],
+            [
+                'kode' => 'R005',
+                'poin' => 150,
+                'reward' => 'Beasiswa 50% + Trophy',
+                'rekomendasi' => 'Beasiswa 50% untuk semester berikutnya plus trophy penghargaan. Status sebagai santri teladan.',
+                'is_active' => true,
+            ],
+            [
+                'kode' => 'R006',
+                'poin' => 200,
+                'reward' => 'Beasiswa Full + Santri Teladan Tahun Ini',
+                'rekomendasi' => 'Beasiswa full 1 tahun. Penobatan sebagai santri teladan tahun ini. Undang media untuk publikasi.',
+                'is_active' => true,
+            ],
+        ];
+
+        // Insert data
+        DB::table('variabel_konsekuensi')->insertOrIgnore($konsekuensi);
+        DB::table('variabel_reward')->insertOrIgnore($reward);
+
+        $this->command->info('✅ Variabel Konsekuensi & Reward berhasil di-seed!');
+        $this->command->info('   - Konsekuensi: 6 level (K001-K006)');
+        $this->command->info('   - Reward: 6 level (R001-R006)');
+    }
+}

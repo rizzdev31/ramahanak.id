@@ -1,0 +1,159 @@
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+
+class VariabelKamusKataSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
+    {
+        $this->seedPelanggaran();
+        $this->seedApresiasi();
+        $this->seedKonselor();
+    }
+
+    /**
+     * Seed Variabel Pelanggaran dengan kamus kata lengkap
+     */
+    private function seedPelanggaran(): void
+    {
+        $data = [
+            [
+                'kode' => 'P001',
+                'kategori' => 'Perundungan Fisik',
+                'poin' => 10,
+                'tindakan' => 'Teguran keras dan pemanggilan orang tua',
+                'kamus_kata' => 'pukul,memukul,mukul,dipukul,pemukul,pemukulan,nonjok,tonjok,menonjok,hajar,menghajar,tendang,menendang,ditendang,dorong,mendorong,didorong,lempar,melempar,dilempar,tampar,menampar,ditampar,jambak,menjambak,dijambak,cekik,mencekik,dicekik,gigit,menggigit,digigit'
+            ],
+            [
+                'kode' => 'P002',
+                'kategori' => 'Pelanggaran Disiplin Waktu',
+                'poin' => 5,
+                'tindakan' => 'Teguran dan membersihkan area tertentu',
+                'kamus_kata' => 'telat,terlambat,ngaret,lambat,keterlambatan,molor,sering,selalu'
+            ],
+            [
+                'kode' => 'P003',
+                'kategori' => 'Pelanggaran Disiplin Kebersihan',
+                'poin' => 3,
+                'tindakan' => 'Membersihkan area yang kotor',
+                'kamus_kata' => 'kotor,buang,membuang,sampah,sembarangan,jorok,kumuh,berantakan,tidak,bersih'
+            ],
+            [
+                'kode' => 'P004',
+                'kategori' => 'Pelanggaran Disiplin Berpakaian',
+                'poin' => 3,
+                'tindakan' => 'Teguran dan perbaikan penampilan',
+                'kamus_kata' => 'pakaian,baju,seragam,tidak,rapi,lusuh,compang,camping,kotor,kusut,tidak,lengkap'
+            ],
+            [
+                'kode' => 'P005',
+                'kategori' => 'Membolos',
+                'poin' => 15,
+                'tindakan' => 'Pemanggilan orang tua dan surat peringatan',
+                'kamus_kata' => 'bolos,membolos,kabur,mangkir,tidak,masuk,tanpa,izin,alfa'
+            ],
+        ];
+
+        foreach ($data as $item) {
+            DB::table('variabel_pelanggaran')->updateOrInsert(
+                ['kode' => $item['kode']],
+                $item
+            );
+        }
+
+        $this->command->info('✓ Variabel Pelanggaran seeded/updated: ' . count($data) . ' records');
+    }
+
+    /**
+     * Seed Variabel Apresiasi dengan kamus kata lengkap
+     */
+    private function seedApresiasi(): void
+    {
+        $data = [
+            [
+                'kode' => 'A001',
+                'kategori' => 'Membantu Sesama',
+                'poin' => 5,
+                'apresiasi' => 'Sertifikat penghargaan',
+                'kamus_kata' => 'bantu,membantu,menolong,tolong,pertolongan,bantuan,gotong,royong,kerja,sama,kerjasama'
+            ],
+            [
+                'kode' => 'A002',
+                'kategori' => 'Prestasi Akademik',
+                'poin' => 10,
+                'apresiasi' => 'Penghargaan juara dan hadiah',
+                'kamus_kata' => 'juara,menang,prestasi,lomba,olimpiade,kompetisi,ranking,peringkat,nilai,bagus,baik,sempurna'
+            ],
+            [
+                'kode' => 'A003',
+                'kategori' => 'Prestasi Non-Akademik',
+                'poin' => 10,
+                'apresiasi' => 'Penghargaan juara dan hadiah',
+                'kamus_kata' => 'juara,menang,olahraga,seni,tahfidz,hafal,alquran,musik,sepak,bola,basket,voli,badminton,berenang'
+            ],
+        ];
+
+        foreach ($data as $item) {
+            DB::table('variabel_apresiasi')->updateOrInsert(
+                ['kode' => $item['kode']],
+                $item
+            );
+        }
+
+        $this->command->info('✓ Variabel Apresiasi seeded/updated: ' . count($data) . ' records');
+    }
+
+    /**
+     * Seed Variabel Konselor dengan kamus kata lengkap
+     */
+    private function seedKonselor(): void
+    {
+        $data = [
+            [
+                'kode' => 'G001',
+                'gangguan_mental' => 'Kecemasan Umum',
+                'rekomendasi' => 'Latihan pernapasan dan konseling rutin',
+                'kamus_kata' => 'cemas,khawatir,takut,was,was,gelisah,panik,grogi,nervous,tegang,stress,stres'
+            ],
+            [
+                'kode' => 'G002',
+                'gangguan_mental' => 'Kecemasan Sosial',
+                'rekomendasi' => 'Terapi exposure dan latihan bicara di depan umum',
+                'kamus_kata' => 'malu,takut,orang,ramai,sosial,interaksi,bicara,depan,umum,gugup,nervous,canggung,awkward'
+            ],
+            [
+                'kode' => 'G003',
+                'gangguan_mental' => 'Depresi',
+                'rekomendasi' => 'Konseling mendalam dan rujukan ke psikolog',
+                'kamus_kata' => 'murung,sedih,down,depresi,galau,patah,semangat,hopeless,putus,asa,bunuh,diri'
+            ],
+            [
+                'kode' => 'G011',
+                'gangguan_mental' => 'Kecanduan Game/Gadget',
+                'rekomendasi' => 'Detoksifikasi gadget dan jadwal ketat',
+                'kamus_kata' => 'game,main,terus,gadget,hp,handphone,kecanduan,addict,tidak,bisa,lepas,online,terus'
+            ],
+            [
+                'kode' => 'G013',
+                'gangguan_mental' => 'Gangguan Kepribadian Ambang',
+                'rekomendasi' => 'Terapi DBT dan rujukan psikiater',
+                'kamus_kata' => 'mood,swing,emosi,tidak,stabil,impulsif,takut,ditinggal,relationship,toxic,self,harm,menyakiti,diri'
+            ],
+        ];
+
+        foreach ($data as $item) {
+            DB::table('variabel_konselor')->updateOrInsert(
+                ['kode' => $item['kode']],
+                $item
+            );
+        }
+
+        $this->command->info('✓ Variabel Konselor seeded/updated: ' . count($data) . ' records');
+    }
+}

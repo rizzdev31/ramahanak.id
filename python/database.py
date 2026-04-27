@@ -1,0 +1,562 @@
+#!/usr/bin/env python3
+"""
+Database Helper v3 - FIXED
+
+PERBAIKAN v3:
+
+BUG UTAMA:
+  get_all_variabel_kata_with_negation() mengembalikan list PER-KATA:
+    [{'kata': 'ngaret', 'kode': 'P002', ...}, ...]
+
+  Tapi kode_matching.py membaca dengan key 'kamus_kata':
+    kamus_kata_str = variabel.get('kamus_kata', '')   SELALU ''!
+
+  Akibat: tidak ada kata yang pernah di-match meski kamus sudah berisi
+  kata yang benar.
+
+FIX:
+  Tambahkan fungsi baru get_all_variabel_with_kamus() yang mengembalikan
+  data PER-VARIABEL (satu dict per baris tabel) dengan key 'kamus_kata'
+  berisi string kata-kata dipisahkan koma.
+
+  Format output baru:
+    [
+      {
+        'kode': 'P002',
+        'kategori': 'pelanggaran',
+        'kamus_kata': 'terlambat,telat,ngaret,lambat',   BENAR
+        'negatable': False,
+        'counterpart_kode': None
+      },
+      ...
+    ]
+
+  Fungsi lama (get_all_variabel_kata_with_negation) TETAP ADA untuk
+  backward compatibility, tapi kode_matching.py harus panggil yang baru.
+
+"""
+
+import sys
+import json
+import mysql.connector
+from mysql.connector import Error
+
+
+class DatabaseHelper:
+    """Database operations helper"""
+
+    def __init__(self, host, user, password, database):
+        self.connection = None
+        try:
+            self.connection = mysql.connector.connect(
+                host=host,
+                user=user,
+                password=password,
+                database=database
+            )
+            if self.connection.is_connected():
+                print(f" Connected to database: {database}", file=sys.stderr)
+        except Error as e:
+            print(f" Database connection error: {e}", file=sys.stderr)
+            raise
+
+    # 
+    # LAPORAN
+    # 
+
+    def get_laporan_awal(self, laporan_id):
+        """Get laporan_awal by ID"""
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM laporan_awal WHERE id = %s", (laporan_id,))
+            result = cursor.fetchone()
+            cursor.close()
+
+            if result:
+                print(f" Found laporan_awal: {laporan_id}", file=sys.stderr)
+            else:
+                print(f" Laporan not found: {laporan_id}", file=sys.stderr)
+
+            return result
+        except Error as e:
+            print(f" Error fetching laporan: {e}", file=sys.stderr)
+            return None
+
+    # 
+    # SANTRI
+    # 
+
+    def get_santri_by_name(self, nama):
+        """Get santri with multiple fallback strategies."""
+        if not nama:
+            return None
+
+        nama_lower = nama.lower().strip()
+
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+
+            # Strategy 1: Exact match nama_panggilan
+            cursor.execute("""
+                SELECT u.id, sp.nama_lengkap, sp.nama_panggilan, sp.nisn
+                FROM users u
+                JOIN santri_profiles sp ON u.id = sp.user_id
+                WHERE LOWER(TRIM(sp.nama_panggilan)) = %s
+                AND u.role = 'santri' AND u.status = 'active'
+                LIMIT 1
+            """, (nama_lower,))
+            result = cursor.fetchone()
+            if result:
+                print(f" Exact match (nama_panggilan): {nama}  {result['nama_panggilan']}", file=sys.stderr)
+                cursor.close()
+                return result
+
+            # Strategy 2: Partial match nama_lengkap
+            cursor.execute("""
+                SELECT u.id, sp.nama_lengkap, sp.nama_panggilan, sp.nisn
+                FROM users u
+                JOIN santri_profiles sp ON u.id = sp.user_id
+                WHERE LOWER(sp.nama_lengkap) LIKE %s
+                AND u.role = 'santri' AND u.status = 'active'
+                LIMIT 1
+            """, (f'%{nama_lower}%',))
+            result = cursor.fetchone()
+            if result:
+                print(f" Partial match (nama_lengkap): {nama}  {result['nama_panggilan']}", file=sys.stderr)
+                cursor.close()
+                return result
+
+            # Strategy 3: Partial match nama_panggilan
+            cursor.execute("""
+                SELECT u.id, sp.nama_lengkap, sp.nama_panggilan, sp.nisn
+                FROM users u
+                JOIN santri_profiles sp ON u.id = sp.user_id
+                WHERE LOWER(sp.nama_panggilan) LIKE %s
+                AND u.role = 'santri' AND u.status = 'active'
+                LIMIT 1
+            """, (f'%{nama_lower}%',))
+            result = cursor.fetchone()
+            if result:
+                print(f" Partial match (nama_panggilan): {nama}  {result['nama_panggilan']}", file=sys.stderr)
+                cursor.close()
+                return result
+
+            print(f" NOT FOUND in database: {nama}", file=sys.stderr)
+            cursor.close()
+            return None
+
+        except Error as e:
+            print(f" Database error: {e}", file=sys.stderr)
+            return None
+
+
+    def get_variabel_konselor_only(self):
+        """
+        Ambil hanya variabel_konselor (kode G).
+        Digunakan oleh analyze_bimbingan.py untuk deteksi gejala mental.
+
+        Return:
+        [
+          {
+            'kode'          : 'G001',
+            'gangguan_mental': 'Kecemasan',
+            'kamus_kata'    : 'cemas,gelisah,takut',
+            'rekomendasi'   : '...',
+          },
+          ...
+        ]
+        """
+        result = []
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT kode, gangguan_mental, kamus_kata,
+                       COALESCE(rekomendasi, '') AS rekomendasi
+                FROM variabel_konselor
+                WHERE kamus_kata IS NOT NULL AND kamus_kata != ''
+                ORDER BY kode
+            """)
+            for row in cursor.fetchall():
+                result.append({
+                    'kode'           : row['kode'],
+                    'gangguan_mental': row.get('gangguan_mental', row['kode']),
+                    'kamus_kata'     : row['kamus_kata'],
+                    'rekomendasi'    : row.get('rekomendasi', ''),
+                })
+            cursor.close()
+            print(f"  Konselor only: {len(result)} variabel loaded", file=sys.stderr)
+        except Error as e:
+            print(f"  Error get_variabel_konselor_only: {e}", file=sys.stderr)
+        return result
+
+    def get_all_santri_names(self):
+        """
+        Ambil semua nama santri aktif untuk blacklist di NER.
+        Berguna agar NER tidak salah mengidentifikasi kata kamus
+        sebagai nama orang.
+
+        Return: set of lowercase strings
+        """
+        names = set()
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT sp.nama_panggilan, sp.nama_lengkap
+                FROM users u
+                JOIN santri_profiles sp ON u.id = sp.user_id
+                WHERE u.role = 'santri'
+            """)
+            for row in cursor.fetchall():
+                if row['nama_panggilan']:
+                    names.add(row['nama_panggilan'].lower().strip())
+                if row['nama_lengkap']:
+                    for part in row['nama_lengkap'].lower().split():
+                        if len(part) >= 2:
+                            names.add(part.strip())
+            cursor.close()
+            print(f" Loaded {len(names)} santri names for NER blacklist", file=sys.stderr)
+        except Error as e:
+            print(f" Error fetching santri names: {e}", file=sys.stderr)
+
+        return names
+
+    # 
+    # VARIABEL - FORMAT PER-VARIABEL ( BARU v3)
+    # 
+
+    def get_all_variabel_with_kamus(self):
+        """
+         FUNGSI BARU v3 - Menggantikan get_all_variabel_kata_with_negation()
+        di kode_matching.py
+
+        Mengembalikan list PER-VARIABEL (satu dict per baris tabel),
+        bukan per-kata. Key 'kamus_kata' berisi string kata-kata yang
+        dipisahkan koma, persis seperti yang disimpan di database.
+
+        Format output:
+        [
+          {
+            'kode'            : 'P002',
+            'kategori'        : 'pelanggaran',
+            'kamus_kata'      : 'terlambat,telat,ngaret,lambat',
+            'negatable'       : False,
+            'counterpart_kode': None
+          },
+          ...
+        ]
+
+        Mengapa format ini berbeda dengan get_all_variabel_kata_with_negation?
+        Fungsi lama memecah kamus_kata menjadi item per-kata karena awalnya
+        didesain untuk lookup langsung. Tapi kode_matching.py membutuhkan
+        format per-variabel agar bisa meng-iterate kamus_kata-nya sendiri
+        (dengan filter is_valid_kata dan MIN_WORD_LENGTH).
+        """
+        all_variabel = []
+
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+
+            #  Pelanggaran 
+            cursor.execute("""
+                SELECT kode, kamus_kata,
+                       COALESCE(negatable, 0) AS negatable,
+                       counterpart_kode
+                FROM variabel_pelanggaran
+                WHERE kamus_kata IS NOT NULL AND kamus_kata != ''
+            """)
+            for row in cursor.fetchall():
+                all_variabel.append({
+                    'kode'            : row['kode'],
+                    'kategori'        : 'pelanggaran',
+                    'kamus_kata'      : row['kamus_kata'],        #  string, BUKAN list
+                    'negatable'       : bool(row['negatable']),
+                    'counterpart_kode': row['counterpart_kode']
+                })
+            print(f"  Pelanggaran: {len(all_variabel)} variabel loaded", file=sys.stderr)
+
+            #  Apresiasi 
+            count_before = len(all_variabel)
+            try:
+                cursor.execute("""
+                    SELECT kode, kamus_kata,
+                           COALESCE(negatable, 0) AS negatable,
+                           counterpart_kode
+                    FROM variabel_apresiasi
+                    WHERE kamus_kata IS NOT NULL AND kamus_kata != ''
+                """)
+                for row in cursor.fetchall():
+                    all_variabel.append({
+                        'kode'            : row['kode'],
+                        'kategori'        : 'apresiasi',
+                        'kamus_kata'      : row['kamus_kata'],
+                        'negatable'       : bool(row['negatable']),
+                        'counterpart_kode': row['counterpart_kode']
+                    })
+                print(f"  Apresiasi: {len(all_variabel) - count_before} variabel loaded", file=sys.stderr)
+            except Error as e:
+                print(f"   variabel_apresiasi tidak bisa diload: {e}", file=sys.stderr)
+
+            #  Konselor (tanpa negation) 
+            count_before = len(all_variabel)
+            try:
+                cursor.execute("""
+                    SELECT kode, kamus_kata
+                    FROM variabel_konselor
+                    WHERE kamus_kata IS NOT NULL AND kamus_kata != ''
+                """)
+                for row in cursor.fetchall():
+                    all_variabel.append({
+                        'kode'            : row['kode'],
+                        'kategori'        : 'konselor',
+                        'kamus_kata'      : row['kamus_kata'],
+                        'negatable'       : False,
+                        'counterpart_kode': None
+                    })
+                print(f"  Konselor: {len(all_variabel) - count_before} variabel loaded", file=sys.stderr)
+            except Error as e:
+                print(f"   variabel_konselor tidak bisa diload: {e}", file=sys.stderr)
+
+            cursor.close()
+
+            # Log total kata yang tersedia
+            total_kata = sum(
+                len([k for k in v['kamus_kata'].split(',') if k.strip()])
+                for v in all_variabel
+            )
+            print(
+                f" Total: {len(all_variabel)} variabel, {total_kata} kata loaded",
+                file=sys.stderr
+            )
+
+            return all_variabel
+
+        except Error as e:
+            print(f" Error in get_all_variabel_with_kamus: {e}", file=sys.stderr)
+            return []
+
+    def get_all_kamus_words_flat(self):
+        """
+        Ambil semua kata dari semua kamus variabel sebagai set flat.
+        Digunakan NER untuk menghindari kata kamus dianggap nama orang.
+
+        Return: set of lowercase strings
+        """
+        words = set()
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+
+            for table in ['variabel_pelanggaran', 'variabel_apresiasi', 'variabel_konselor']:
+                try:
+                    cursor.execute(f"SELECT kamus_kata FROM {table} WHERE kamus_kata IS NOT NULL")
+                    for row in cursor.fetchall():
+                        for kata in row['kamus_kata'].split(','):
+                            kata = kata.strip().lower()
+                            if kata:
+                                words.add(kata)
+                except Error:
+                    pass
+
+            cursor.close()
+            print(f" Loaded {len(words)} kamus words for NER exclusion", file=sys.stderr)
+        except Error as e:
+            print(f" Error loading kamus words: {e}", file=sys.stderr)
+
+        return words
+
+    # 
+    # VARIABEL - FORMAT PER-KATA (backward compat, JANGAN dipakai di kode_matching)
+    # 
+
+    def get_all_variabel_kata_with_negation(self):
+        """
+          DEPRECATED untuk kode_matching.py
+        Gunakan get_all_variabel_with_kamus() sebagai gantinya.
+
+        Fungsi ini TETAP ADA untuk backward compatibility dengan
+        kode lain yang mungkin memanggilnya.
+
+        Mengembalikan list PER-KATA (bukan per-variabel):
+        [{'kata': 'ngaret', 'kode': 'P002', 'kategori': 'pelanggaran', ...}]
+        """
+        all_kata = []
+
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT kode, kamus_kata,
+                       COALESCE(negatable, 0) AS negatable,
+                       counterpart_kode
+                FROM variabel_pelanggaran
+            """)
+            for row in cursor.fetchall():
+                if row['kamus_kata']:
+                    for kata in row['kamus_kata'].split(','):
+                        kata = kata.strip()
+                        if kata:
+                            all_kata.append({
+                                'kata'            : kata,
+                                'kategori'        : 'pelanggaran',
+                                'kode'            : row['kode'],
+                                'negatable'       : bool(row['negatable']),
+                                'counterpart_kode': row['counterpart_kode']
+                            })
+
+            try:
+                cursor.execute("""
+                    SELECT kode, kamus_kata,
+                           COALESCE(negatable, 0) AS negatable,
+                           counterpart_kode
+                    FROM variabel_apresiasi
+                """)
+                for row in cursor.fetchall():
+                    if row['kamus_kata']:
+                        for kata in row['kamus_kata'].split(','):
+                            kata = kata.strip()
+                            if kata:
+                                all_kata.append({
+                                    'kata'            : kata,
+                                    'kategori'        : 'apresiasi',
+                                    'kode'            : row['kode'],
+                                    'negatable'       : bool(row['negatable']),
+                                    'counterpart_kode': row['counterpart_kode']
+                                })
+            except Error:
+                pass
+
+            try:
+                cursor.execute("SELECT kode, kamus_kata FROM variabel_konselor")
+                for row in cursor.fetchall():
+                    if row['kamus_kata']:
+                        for kata in row['kamus_kata'].split(','):
+                            kata = kata.strip()
+                            if kata:
+                                all_kata.append({
+                                    'kata'            : kata,
+                                    'kategori'        : 'konselor',
+                                    'kode'            : row['kode'],
+                                    'negatable'       : False,
+                                    'counterpart_kode': None
+                                })
+            except Error:
+                pass
+
+            cursor.close()
+            print(f" (deprecated) Loaded {len(all_kata)} kata", file=sys.stderr)
+            return all_kata
+
+        except Error as e:
+            print(f" Error: {e}", file=sys.stderr)
+            return []
+
+    # 
+    # SAVE HASIL PREPROCESSING
+    # 
+
+    def save_hasil_preprocessing(self, data):
+        """Save hasil preprocessing ke database."""
+        try:
+            cursor = self.connection.cursor()
+
+            preprocessing_data = data.get('preprocessing_data', {})
+            if 'negation_log' in data:
+                preprocessing_data['negation_log'] = data['negation_log']
+
+            values = (
+                data['laporan_id'],
+                json.dumps(data['kode_matched']),
+                data.get('pelaku_nama'),
+                data.get('pelaku_santri_id'),
+                data.get('korban_nama'),
+                data.get('korban_santri_id'),
+                data.get('kata_kerja_dasar'),
+                json.dumps(preprocessing_data),
+                'pending_validasi'
+            )
+
+            cursor.execute("""
+                INSERT INTO hasil_preprocessing (
+                    laporan_awal_id,
+                    kode_matched,
+                    pelaku_nama,
+                    pelaku_santri_id,
+                    korban_nama,
+                    korban_santri_id,
+                    kata_kerja_dasar,
+                    preprocessing_data,
+                    status,
+                    processed_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            """, values)
+
+            self.connection.commit()
+            hasil_id = cursor.lastrowid
+            cursor.close()
+
+            print(f" Saved: hasil_preprocessing_id={hasil_id}", file=sys.stderr)
+            if data.get('negation_log'):
+                print(f" Negation log: {len(data['negation_log'])} flip actions", file=sys.stderr)
+
+            return hasil_id
+
+        except Error as e:
+            print(f" Error saving hasil: {e}", file=sys.stderr)
+            if self.connection:
+                self.connection.rollback()
+            return None
+
+    # 
+    # LEGACY (backward compat)
+    # 
+
+    def get_kamus_kata(self):
+        """Legacy: Ambil kata dari variabel_pelanggaran saja."""
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            cursor.execute("SELECT kode, kamus_kata FROM variabel_pelanggaran")
+            results = cursor.fetchall()
+            cursor.close()
+
+            kata_list = []
+            for row in results:
+                if row['kamus_kata']:
+                    for kata in row['kamus_kata'].split(','):
+                        kata = kata.strip()
+                        if kata:
+                            kata_list.append({'kata': kata, 'kategori': 'pelanggaran', 'kode': row['kode']})
+
+            print(f" (legacy) Loaded {len(kata_list)} kata from variabel_pelanggaran", file=sys.stderr)
+            return kata_list
+        except Error as e:
+            print(f" Error: {e}", file=sys.stderr)
+            return []
+
+    def get_all_variabel_kata(self):
+        """Legacy: alias ke get_all_variabel_kata_with_negation."""
+        return self.get_all_variabel_kata_with_negation()
+
+    # 
+    # CLOSE
+    # 
+
+    def close(self):
+        """Close database connection."""
+        if self.connection and self.connection.is_connected():
+            self.connection.close()
+            print(" Database connection closed", file=sys.stderr)
+
+
+def get_db():
+    """Get database connection from .env file."""
+    import os
+    from dotenv import load_dotenv
+
+    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+    load_dotenv(env_path)
+
+    return DatabaseHelper(
+        host     = os.getenv('DB_HOST', 'localhost'),
+        user     = os.getenv('DB_USERNAME', 'root'),
+        password = os.getenv('DB_PASSWORD', ''),
+        database = os.getenv('DB_DATABASE', 'db_ra')
+    )
