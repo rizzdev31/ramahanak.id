@@ -10,12 +10,13 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 
 class ProcessLaporanJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries = 3;
+    public $tries   = 3;
     public $timeout = 120;
 
     protected $laporanId;
@@ -35,7 +36,8 @@ class ProcessLaporanJob implements ShouldQueue
         $attempt = $this->attempts();
         Log::info('Starting preprocessing job', [
             'laporan_id' => $this->laporanId,
-            'attempt' => $attempt
+            'attempt'    => $attempt,
+            'mode'       => $this->isApiMode() ? 'flask_api' : 'exec',
         ]);
 
         try {
@@ -44,149 +46,116 @@ class ProcessLaporanJob implements ShouldQueue
                 throw new \Exception("Laporan {$this->laporanId} not found");
             }
 
-            // ✅ CHECK: Jika sudah ada hasil, skip processing
+            //  Skip jika hasil sudah ada 
             $existingHasil = HasilPreprocessing::where('laporan_awal_id', $this->laporanId)
                 ->whereIn('status', ['pending_validasi', 'approved'])
                 ->first();
-            
+
             if ($existingHasil) {
-                Log::info('Preprocessing result already exists', [
+                Log::info('Preprocessing result already exists, skipping', [
                     'laporan_id' => $this->laporanId,
-                    'hasil_id' => $existingHasil->id,
-                    'status' => $existingHasil->status
+                    'hasil_id'   => $existingHasil->id,
+                    'status'     => $existingHasil->status,
                 ]);
-                
-                // Update laporan status jika belum 'processed'
                 if ($laporan->status !== 'processed') {
                     $laporan->status = 'processed';
                     $laporan->save();
                 }
-                
-                return; // ✅ Skip processing, hasil sudah ada
+                return;
             }
 
-            $pythonPath = $this->getPythonPath();
-            $scriptPath = $this->getScriptPath();
-            
-            $command = sprintf(
-                '"%s" "%s" --laporan_id=%d --save-to-db 2>&1',
-                $pythonPath,
-                $scriptPath,
-                $this->laporanId
-            );
+            //  Pilih mode: Flask API atau exec() 
+            if ($this->isApiMode()) {
+                $result = $this->runViaFlaskApi($laporan);
+            } else {
+                $result = $this->runViaExec();
+            }
 
-            Log::info('Executing preprocessing', [
-                'laporan_id' => $this->laporanId,
-                'command' => $command,
-                'python_path' => $pythonPath,
-                'script_path' => $scriptPath,
-            ]);
-
-            $output = [];
-            $returnCode = 0;
-            exec($command, $output, $returnCode);
-            $outputString = implode("\n", $output);
-
-            Log::info('Python output received', [
-                'output_length' => strlen($outputString),
-                'output_preview' => substr($outputString, 0, 200),
-                'return_code' => $returnCode,
-            ]);
-
-            // ✅ BETTER: Extract JSON from output
-            $result = $this->extractJsonFromOutput($outputString);
-
+            //  Proses hasil 
             if (!$result) {
-                // ✅ FIX: Check if Python already saved to DB
+                // Fallback: cek apakah Python sudah simpan ke DB langsung
                 $hasil = HasilPreprocessing::where('laporan_awal_id', $this->laporanId)
                     ->latest('id')
                     ->first();
-                
+
                 if ($hasil) {
-                    Log::warning('No JSON in output, but hasil exists in DB', [
+                    Log::warning('No result returned, but hasil exists in DB', [
                         'laporan_id' => $this->laporanId,
-                        'hasil_id' => $hasil->id,
-                        'status' => $hasil->status
+                        'hasil_id'   => $hasil->id,
+                        'status'     => $hasil->status,
                     ]);
-                    
-                    // Update laporan status
                     $laporan->status = 'processed';
                     $laporan->save();
-                    
-                    return; // ✅ Success despite no JSON
+                    return;
                 }
-                
-                throw new \Exception('No valid JSON found in Python output');
+
+                throw new \Exception('Preprocessing tidak mengembalikan hasil yang valid');
             }
 
-            if ($result['status'] !== 'success') {
-                throw new \Exception($result['error'] ?? 'Preprocessing failed');
+            if (($result['status'] ?? '') !== 'success') {
+                throw new \Exception($result['error'] ?? $result['message'] ?? 'Preprocessing failed');
             }
 
             $hasilId = $result['hasil_preprocessing_id'] ?? null;
             if (!$hasilId) {
-                throw new \Exception('Python did not return hasil_preprocessing_id');
+                throw new \Exception('Preprocessing tidak mengembalikan hasil_preprocessing_id');
             }
 
             $hasil = HasilPreprocessing::find($hasilId);
             if (!$hasil) {
-                throw new \Exception("HasilPreprocessing {$hasilId} not found in database");
+                throw new \Exception("HasilPreprocessing {$hasilId} tidak ditemukan di database");
             }
 
-            // ✅ Update laporan status to 'processed'
             $laporan->status = 'processed';
             $laporan->save();
 
             Log::info('Preprocessing completed successfully', [
-                'laporan_id' => $this->laporanId,
-                'hasil_id' => $hasilId,
+                'laporan_id'   => $this->laporanId,
+                'hasil_id'     => $hasilId,
                 'kode_matched' => $hasil->kode_matched,
-                'pelaku_nama' => $hasil->pelaku_nama,
-                'korban_nama' => $hasil->korban_nama,
+                'pelaku_nama'  => $hasil->pelaku_nama,
+                'korban_nama'  => $hasil->korban_nama,
+                'mode'         => $this->isApiMode() ? 'flask_api' : 'exec',
             ]);
 
         } catch (\Exception $e) {
             Log::error('Preprocessing job failed', [
                 'laporan_id' => $this->laporanId,
-                'error' => $e->getMessage(),
-                'attempt' => $attempt,
+                'error'      => $e->getMessage(),
+                'attempt'    => $attempt,
+                'mode'       => $this->isApiMode() ? 'flask_api' : 'exec',
             ]);
 
-            // ✅ FIX: Only create failed record if NO hasil exists yet
+            // Simpan/update record failed
             $existingHasil = HasilPreprocessing::where('laporan_awal_id', $this->laporanId)->first();
-            
+
             if (!$existingHasil) {
                 HasilPreprocessing::create([
                     'laporan_awal_id' => $this->laporanId,
-                    'kode_matched' => [],
-                    'status' => 'failed',
-                    'error_message' => $e->getMessage(),
-                    'processed_at' => now(),
+                    'kode_matched'    => [],
+                    'status'          => 'failed',
+                    'error_message'   => $e->getMessage(),
+                    'processed_at'    => now(),
                 ]);
-                
                 Log::info('Created failed hasil_preprocessing record', [
                     'laporan_id' => $this->laporanId,
                 ]);
             } else {
-                // ✅ Update existing record to failed
                 $existingHasil->update([
-                    'status' => 'failed',
+                    'status'        => 'failed',
                     'error_message' => $e->getMessage(),
                 ]);
-                
                 Log::info('Updated existing hasil to failed', [
                     'laporan_id' => $this->laporanId,
-                    'hasil_id' => $existingHasil->id,
+                    'hasil_id'   => $existingHasil->id,
                 ]);
             }
 
             if ($attempt >= $this->tries) {
                 Log::error('Preprocessing job failed permanently', [
                     'laporan_id' => $this->laporanId,
-                    'error' => $e->getMessage(),
+                    'error'      => $e->getMessage(),
                 ]);
-                
-                // ✅ Update laporan status even if failed
                 $laporan = LaporanAwal::find($this->laporanId);
                 if ($laporan) {
                     $laporan->status = 'processed';
@@ -198,11 +167,121 @@ class ProcessLaporanJob implements ShouldQueue
         }
     }
 
-    private function extractJsonFromOutput($output)
+    // 
+    // MODE CHECK
+    // 
+
+    /**
+     * Cek apakah harus pakai Flask API (PythonAnywhere) atau exec() lokal.
+     * Otomatis berdasarkan NLP_API_URL di .env.
+     * - Shared Hosting / tidak ada Python: set NLP_API_URL di .env
+     * - Lokal / VPS dengan Python: biarkan NLP_API_URL kosong
+     */
+    private function isApiMode(): bool
+    {
+        return !empty(env('NLP_API_URL'));
+    }
+
+    // 
+    // MODE 1: FLASK API (PythonAnywhere)  untuk Shared Hosting
+    // 
+
+    private function runViaFlaskApi(LaporanAwal $laporan): ?array
+    {
+        $apiUrl   = rtrim(env('NLP_API_URL'), '/');
+        $apiToken = env('NLP_API_TOKEN', '');
+
+        if (!$apiUrl) {
+            throw new \Exception('NLP_API_URL tidak dikonfigurasi di .env');
+        }
+
+        Log::info('Calling Flask NLP API', [
+            'laporan_id' => $this->laporanId,
+            'api_url'    => $apiUrl . '/preprocess',
+        ]);
+
+        $response = Http::timeout(90)
+            ->withHeaders(['X-API-Token' => $apiToken])
+            ->post($apiUrl . '/preprocess', [
+                'laporan_id'   => $this->laporanId,
+                'teks_laporan' => $laporan->teks_laporan,
+                'db_host'      => env('DB_HOST', 'localhost'),
+                'db_name'      => env('DB_DATABASE'),
+                'db_user'      => env('DB_USERNAME'),
+                'db_pass'      => env('DB_PASSWORD'),
+            ]);
+
+        if ($response->status() === 401) {
+            throw new \Exception('Flask API: Unauthorized  periksa NLP_API_TOKEN di .env');
+        }
+
+        if (!$response->successful()) {
+            throw new \Exception(
+                'Flask API error: HTTP ' . $response->status() .
+                '  ' . substr($response->body(), 0, 200)
+            );
+        }
+
+        $result = $response->json();
+
+        Log::info('Flask API response received', [
+            'laporan_id' => $this->laporanId,
+            'status'     => $result['status'] ?? 'unknown',
+        ]);
+
+        return $result;
+    }
+
+    // 
+    // MODE 2: EXEC()  untuk lokal / VPS dengan Python tersedia
+    // 
+
+    private function runViaExec(): ?array
+    {
+        $pythonPath = $this->getPythonPath();
+        $scriptPath = $this->getScriptPath();
+
+        $command = sprintf(
+            '"%s" "%s" --laporan_id=%d --save-to-db 2>&1',
+            $pythonPath,
+            $scriptPath,
+            $this->laporanId
+        );
+
+        Log::info('Executing preprocessing via exec()', [
+            'laporan_id'  => $this->laporanId,
+            'command'     => $command,
+            'python_path' => $pythonPath,
+            'script_path' => $scriptPath,
+        ]);
+
+        $output     = [];
+        $returnCode = 0;
+        exec($command, $output, $returnCode);
+        $outputString = implode("\n", $output);
+
+        Log::info('Python exec() output received', [
+            'output_length'  => strlen($outputString),
+            'output_preview' => substr($outputString, 0, 200),
+            'return_code'    => $returnCode,
+        ]);
+
+        return $this->extractJsonFromOutput($outputString);
+    }
+
+    // 
+    // HELPERS (sama persis dengan file lama yang sudah berjalan)
+    // 
+
+    /**
+     * Extract JSON dari output Python.
+     * Dipertahankan persis dari file original karena sudah terbukti bekerja.
+     */
+    private function extractJsonFromOutput($output): ?array
     {
         // Strategy 1: Find last line starting with '{'
         $lines = explode("\n", trim($output));
-        
+
         for ($i = count($lines) - 1; $i >= 0; $i--) {
             $line = trim($lines[$i]);
             if ($line && $line[0] === '{') {
@@ -215,11 +294,11 @@ class ProcessLaporanJob implements ShouldQueue
 
         // Strategy 2: Find first '{' and last '}'
         $start = strpos($output, '{');
-        $end = strrpos($output, '}');
-        
+        $end   = strrpos($output, '}');
+
         if ($start !== false && $end !== false) {
             $jsonString = substr($output, $start, $end - $start + 1);
-            $result = json_decode($jsonString, true);
+            $result     = json_decode($jsonString, true);
             if (json_last_error() === JSON_ERROR_NONE) {
                 return $result;
             }
@@ -228,36 +307,43 @@ class ProcessLaporanJob implements ShouldQueue
         return null;
     }
 
-    private function getPythonPath()
+    /**
+     * Detect Python path  Windows, Linux/VPS, fallback.
+     * Dipertahankan persis dari file original.
+     */
+    private function getPythonPath(): string
     {
         $basePath = base_path('python');
-        
-        // Windows
+
+        // Windows: cek venv dulu
         if (DIRECTORY_SEPARATOR === '\\') {
             $path = $basePath . '\\venv\\Scripts\\python.exe';
             if (file_exists($path)) return $path;
-        } 
-        // Linux/Mac
-        else {
+        } else {
+            // Linux/Mac: cek venv dulu
             $path = $basePath . '/venv/bin/python';
             if (file_exists($path)) return $path;
+
+            // Fallback: python3 system (VPS Ubuntu)
+            $python3 = trim(shell_exec('which python3 2>/dev/null') ?? '');
+            if ($python3) return $python3;
         }
-        
-        // Fallback to system python
+
+        // Last resort
         return 'python';
     }
 
-    private function getScriptPath()
+    private function getScriptPath(): string
     {
         return base_path('python/preprocessing.py');
     }
 
     public function failed(\Exception $exception)
     {
-        Log::error('Failed to dispatch preprocessing job', [
+        Log::error('ProcessLaporanJob permanently failed', [
             'laporan_id' => $this->laporanId,
-            'error' => $exception->getMessage(),
-            'trace' => $exception->getTraceAsString()
+            'error'      => $exception->getMessage(),
+            'trace'      => $exception->getTraceAsString(),
         ]);
     }
 }
