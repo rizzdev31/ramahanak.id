@@ -91,28 +91,33 @@ class HasilPreprocessingController extends Controller
                     'pelaku_nama' => $item->pelaku_nama,
                     'pelaku_santri_id' => $item->pelaku_santri_id,
                     'pelaku_santri' => $item->pelakuSantri && $item->pelakuSantri->santriProfile ? [
-                        'id' => $item->pelakuSantri->id,
-                        'nama_lengkap' => $item->pelakuSantri->santriProfile->nama_lengkap,
+                        'id'             => $item->pelakuSantri->id,
+                        'nama_lengkap'   => $item->pelakuSantri->santriProfile->nama_lengkap,
                         'nama_panggilan' => $item->pelakuSantri->santriProfile->nama_panggilan,
-                        'nisn' => $item->pelakuSantri->santriProfile->nisn,
-                        'kelas_kode' => $item->pelakuSantri->santriProfile->kelas?->kode_kelas ?? '-',
+                        'nisn'           => $item->pelakuSantri->santriProfile->nisn,
+                        'kelas_kode'     => $item->pelakuSantri->santriProfile->kelas?->kode_kelas ?? '-',
                     ] : null,
                     
                     'korban_nama' => $item->korban_nama,
                     'korban_santri_id' => $item->korban_santri_id,
                     'korban_santri' => $item->korbanSantri && $item->korbanSantri->santriProfile ? [
-                        'id' => $item->korbanSantri->id,
-                        'nama_lengkap' => $item->korbanSantri->santriProfile->nama_lengkap,
+                        'id'             => $item->korbanSantri->id,
+                        'nama_lengkap'   => $item->korbanSantri->santriProfile->nama_lengkap,
                         'nama_panggilan' => $item->korbanSantri->santriProfile->nama_panggilan,
-                        'nisn' => $item->korbanSantri->santriProfile->nisn,
-                        'kelas_kode' => $item->korbanSantri->santriProfile->kelas?->kode_kelas ?? '-',
+                        'nisn'           => $item->korbanSantri->santriProfile->nisn,
+                        'kelas_kode'     => $item->korbanSantri->santriProfile->kelas?->kode_kelas ?? '-',
                     ] : null,
                     
                     'kata_kerja_dasar' => $item->kata_kerja_dasar,
-                    'format_laporan'   => $item->format_laporan,
+                    'format_laporan'   => $item->format_laporan ?? null,
                     'verb_info'        => $item->verb_info ?? null,
                     'pelaku_kode'      => $item->pelaku_kode ?? [],
                     'korban_kode'      => $item->korban_kode ?? [],
+                    'kode_konsekuensi' => $item->kode_konsekuensi ?? [],
+                    'kode_diagnosis'   => $item->kode_diagnosis ?? [],
+                    'kode_reward'      => $item->kode_reward ?? [],
+                    
+                    'status' => $item->status,
                     'status_label' => $item->status_label,
                     'status_badge_color' => $item->status_badge_color,
                     'is_corrected' => $item->is_corrected,
@@ -162,8 +167,8 @@ class HasilPreprocessingController extends Controller
         try {
             $hasil->load([
                 'laporanAwal',
-                'pelakuSantri.santriProfile.kelas',
-                'korbanSantri.santriProfile.kelas'
+                'pelakuSantri.santriProfile',
+                'korbanSantri.santriProfile'
             ]);
 
             return Inertia::render('HasilPreprocessing/Edit', [
@@ -182,36 +187,24 @@ class HasilPreprocessingController extends Controller
                     'pelaku_nama' => $hasil->pelaku_nama,
                     'pelaku_santri_id' => $hasil->pelaku_santri_id,
                     'pelaku_santri' => $hasil->pelakuSantri && $hasil->pelakuSantri->santriProfile ? [
-                        'id'             => $hasil->pelakuSantri->id,
-                        'nama_lengkap'   => $hasil->pelakuSantri->santriProfile->nama_lengkap,
+                        'id' => $hasil->pelakuSantri->id,
+                        'nama_lengkap' => $hasil->pelakuSantri->santriProfile->nama_lengkap,
                         'nama_panggilan' => $hasil->pelakuSantri->santriProfile->nama_panggilan,
-                        'nisn'           => $hasil->pelakuSantri->santriProfile->nisn,
-                        'kelas_kode'     => $hasil->pelakuSantri->santriProfile->kelas?->kode_kelas ?? '-',
+                        'nisn' => $hasil->pelakuSantri->santriProfile->nisn,
                     ] : null,
                     
                     'korban_nama' => $hasil->korban_nama,
                     'korban_santri_id' => $hasil->korban_santri_id,
                     'korban_santri' => $hasil->korbanSantri && $hasil->korbanSantri->santriProfile ? [
-                        'id'             => $hasil->korbanSantri->id,
-                        'nama_lengkap'   => $hasil->korbanSantri->santriProfile->nama_lengkap,
+                        'id' => $hasil->korbanSantri->id,
+                        'nama_lengkap' => $hasil->korbanSantri->santriProfile->nama_lengkap,
                         'nama_panggilan' => $hasil->korbanSantri->santriProfile->nama_panggilan,
-                        'nisn'           => $hasil->korbanSantri->santriProfile->nisn,
-                        'kelas_kode'     => $hasil->korbanSantri->santriProfile->kelas?->kode_kelas ?? '-',
+                        'nisn' => $hasil->korbanSantri->santriProfile->nisn,
                     ] : null,
                     
                     'kata_kerja_dasar' => $hasil->kata_kerja_dasar,
-                    'format_laporan'   => $hasil->format_laporan,
-                    'verb_info'        => $hasil->verb_info ?? null,
-                    'pelaku_kode'      => $hasil->pelaku_kode ?? [],
-                    'korban_kode'      => $hasil->korban_kode ?? [],
-                    'kode_konsekuensi' => $hasil->kode_konsekuensi ?? [],
-                    'kode_diagnosis'   => $hasil->kode_diagnosis ?? [],
-                    'kode_reward'      => $hasil->kode_reward ?? [],
                     'correction_notes' => $hasil->correction_notes,
-                    'is_corrected'     => $hasil->is_corrected,
-                    'preprocessing_data' => $hasil->preprocessing_data,
-                    'negation_log'     => $hasil->negation_log ?? [],
-                    'error_message'    => $hasil->error_message,
+                    'error_message' => $hasil->error_message,
                 ],
                 'santriList' => $this->getSantriList(),
                 'variabelList' => $this->getVariabelList(),
@@ -679,22 +672,19 @@ class HasilPreprocessingController extends Controller
     {
         return User::where('role', 'santri')
             ->where('status', 'active')
-            ->with(['santriProfile.kelas'])
+            ->with('santriProfile')
             ->get()
             ->filter(fn($u) => $u->santriProfile)
             ->map(function($u) {
-                $profile  = $u->santriProfile;
-                $kelasKode = $profile->kelas?->kode_kelas ?? '-';
+                $profile = $u->santriProfile;
                 return [
-                    'id'             => $u->id,
-                    'nama_lengkap'   => $profile->nama_lengkap,
+                    'id' => $u->id,
+                    'nama_lengkap' => $profile->nama_lengkap,
                     'nama_panggilan' => $profile->nama_panggilan,
-                    'nisn'           => $profile->nisn,
-                    'kelas_kode'     => $kelasKode,
-                    'label'          => sprintf(
-                        '%s - Kelas %s (%s)',
+                    'nisn' => $profile->nisn,
+                    'label' => sprintf(
+                        '%s (%s)',
                         $profile->nama_panggilan ?? $profile->nama_lengkap,
-                        $kelasKode,
                         $profile->nisn ?? '-'
                     ),
                 ];

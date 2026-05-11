@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import AppLayout from '@/Layouts/AppLayout';
+import GuruBkLayout from '@/Layouts/GuruBk/GuruBkLayout';
 import { Head, useForm, router, Link } from '@inertiajs/react';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
@@ -9,32 +9,32 @@ import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import InputError from '@/Components/InputError';
 
-// ✅ Di luar komponen — tidak re-render tiap siklus
+//  Di luar komponen  tidak re-render tiap siklus
 const DEFAULT_AVATAR = '/storage/defaultavatar.png';
 
 export default function ManageUser({ auth, users, kelas, filters }) {
 
-    // ── State ────────────────────────────────────────────────
+    //  State 
     const [editingUser,     setEditingUser]     = useState(null);
     const [showEditModal,   setShowEditModal]   = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [userToDelete,    setUserToDelete]    = useState(null);
 
-    // Filter state — sinkron dengan props filters dari controller
+    // Filter state  sinkron dengan props filters dari controller
     const [filterRole,   setFilterRole]   = useState(filters?.role   || '');
     const [filterStatus, setFilterStatus] = useState(filters?.status || '');
     const [search,       setSearch]       = useState(filters?.search  || '');
 
-    // ── Form ─────────────────────────────────────────────────
+    //  Form 
     const { data, setData, put, post, processing, errors, reset, clearErrors } = useForm({
         email: '', nama_lengkap: '', nama_panggilan: '',
         tempat_lahir: '', tanggal_lahir: '', jenis_kelamin: 'Laki-laki',
         no_whatsapp: '', nip: '', nisn: '', jabatan: '',
-        nama_wali: '', kelas_id: '', alamat: '', // ✅ FIX: tambah kelas_id di initial state
+        nama_wali: '', kelas_id: '', alamat: '', //  FIX: tambah kelas_id di initial state
         foto: null, password: '', password_confirmation: '',
     });
 
-    // ── Filter handlers ──────────────────────────────────────
+    //  Filter handlers 
     const handleFilter = () => {
         router.get(route('manage-user.index'),
             { role: filterRole, status: filterStatus, search },
@@ -47,7 +47,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
         router.get(route('manage-user.index'));
     };
 
-    // ── Approve ──────────────────────────────────────────────
+    //  Approve 
     const handleApprove = (userId) => {
         if (!confirm('Approve user ini?')) return;
         router.post(route('manage-user.approve', userId), {}, {
@@ -56,7 +56,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
         });
     };
 
-    // ── Toggle status ────────────────────────────────────────
+    //  Toggle status 
     const handleToggleStatus = (userId) => {
         if (!confirm('Ubah status user ini?')) return;
         router.post(route('manage-user.toggle-status', userId), {}, {
@@ -65,7 +65,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
         });
     };
 
-    // ── Open edit modal ──────────────────────────────────────
+    //  Open edit modal 
     const openEditModal = (user) => {
         clearErrors();
 
@@ -75,7 +75,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
         else if (user.role === 'guru_bk')          profile = user.guru_bk_profile;
         else if (user.role === 'tenaga_pendidik')  profile = user.tenaga_pendidik_profile;
 
-        // ✅ Format tanggal → "YYYY-MM-DD" agar cocok dengan input type="date"
+        //  Format tanggal  "YYYY-MM-DD" agar cocok dengan input type="date"
         const tanggalLahir = profile?.tanggal_lahir
             ? profile.tanggal_lahir.split('T')[0]
             : '';
@@ -92,7 +92,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
             nisn:           profile?.nisn           || '',
             jabatan:        profile?.jabatan        || '',
             nama_wali:      profile?.nama_wali      || '',
-            kelas_id:       profile?.kelas_id       || '', // ✅ FIX: tambah kelas_id
+            kelas_id:       profile?.kelas_id       || '', //  FIX: tambah kelas_id
             alamat:         profile?.alamat         || '',
             foto:           null,
             password:       '',
@@ -103,8 +103,8 @@ export default function ManageUser({ auth, users, kelas, filters }) {
         setShowEditModal(true);
     };
 
-    // ── Submit edit ──────────────────────────────────────────
-    // ✅ Hanya pakai forceFormData jika ada foto → cegah field hilang
+    //  Submit edit 
+    //  Hanya pakai forceFormData jika ada foto  cegah field hilang
     const handleSubmitEdit = (e) => {
         e.preventDefault();
         const opts = {
@@ -117,7 +117,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
             : put(route('manage-user.update',  editingUser.id), opts);
     };
 
-    // ── Delete ───────────────────────────────────────────────
+    //  Delete 
     const openDeleteModal = (user) => { setUserToDelete(user); setShowDeleteModal(true); };
 
     const handleDelete = () => {
@@ -129,7 +129,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
         });
     };
 
-    // ── Helpers ──────────────────────────────────────────────
+    //  Helpers 
     const getUserName = (user) => {
         const p = user.santri_profile || user.guru_bk_profile || user.tenaga_pendidik_profile;
         return p?.nama_lengkap || 'N/A';
@@ -141,13 +141,13 @@ export default function ManageUser({ auth, users, kelas, filters }) {
         return p?.nip || '-';
     };
 
-    // ✅ FIX defaultavatar — onError pakai e.target.onerror = null; cegah infinite loop
+    //  FIX defaultavatar  onError pakai e.target.onerror = null; cegah infinite loop
     const getProfileFoto = (user) => {
         const p = user.santri_profile || user.guru_bk_profile || user.tenaga_pendidik_profile;
         return p?.foto ? `/storage/${p.foto}` : DEFAULT_AVATAR;
     };
 
-    // ✅ Kolom Kelas / Penugasan (sinkron dari DB, read-only):
+    //  Kolom Kelas / Penugasan (sinkron dari DB, read-only):
     const getKelasOrPenugasan = (user) => {
         if (user.role === 'santri') {
             const k = user.santri_profile?.kelas;
@@ -208,9 +208,9 @@ export default function ManageUser({ auth, users, kelas, filters }) {
         );
     };
 
-    // ── Render ───────────────────────────────────────────────
+    //  Render 
     return (
-        <AppLayout
+        <GuruBkLayout
             user={auth.user}
             header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Kelola User</h2>}
         >
@@ -219,7 +219,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
             <div className="py-8">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
 
-                    {/* ══ Filter Bar ══════════════════════════════ */}
+                    {/*  Filter Bar  */}
                     <div className="bg-white rounded-lg shadow-sm p-4">
                         <div className="flex flex-wrap gap-3 items-end">
 
@@ -265,7 +265,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
                         </div>
                     </div>
 
-                    {/* ══ Tabel ═══════════════════════════════════ */}
+                    {/*  Tabel  */}
                     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -372,7 +372,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
                         {users.links?.length > 3 && (
                             <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
                                 <p className="text-xs text-gray-400">
-                                    Menampilkan {users.from}–{users.to} dari {users.total} user
+                                    Menampilkan {users.from}{users.to} dari {users.total} user
                                 </p>
                                 <div className="flex gap-1 flex-wrap">
                                     {users.links.map((link, i) => (
@@ -391,45 +391,47 @@ export default function ManageUser({ auth, users, kelas, filters }) {
                 </div>
             </div>
 
-            {/* ══════════════════════════════════════════════════
+            {/* 
                 Modal Edit
-            ══════════════════════════════════════════════════ */}
-            <Modal show={showEditModal} onClose={() => { setShowEditModal(false); clearErrors(); }} maxWidth="3xl">
-                <form onSubmit={handleSubmitEdit} className="divide-y divide-gray-100">
+             */}
+            <Modal show={showEditModal} onClose={() => { setShowEditModal(false); clearErrors(); }} maxWidth="2xl">
+                <form onSubmit={handleSubmitEdit} className="flex flex-col max-h-[90vh] divide-y divide-gray-100">
 
                     {/* Header */}
-                    <div className="px-6 py-4">
-                        <h2 className="text-lg font-semibold text-gray-900">Edit User</h2>
+                    <div className="px-5 py-4 shrink-0">
+                        <h2 className="text-base font-bold text-gray-900">Edit User</h2>
                         {editingUser && (
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-sm text-gray-500">{getUserName(editingUser)}</span>
-                                <span className="text-gray-300">•</span>
+                                <span className="text-gray-300"></span>
                                 {roleBadge(editingUser.role)}
                             </div>
                         )}
                     </div>
 
+                    {/* Scrollable body */}
+                    <div className="flex-1 overflow-y-auto">
                     {/* Fields umum */}
-                    <div className="px-6 py-5">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="px-5 py-5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
                             <div>
                                 <InputLabel htmlFor="email" value="Email *" />
-                                <TextInput id="email" type="email" className="mt-1 block w-full"
+                                <TextInput id="email" type="email" className="mt-1 block w-full text-sm"
                                     value={data.email} onChange={(e) => setData('email', e.target.value)} required />
                                 <InputError message={errors.email} className="mt-1" />
                             </div>
 
                             <div>
                                 <InputLabel htmlFor="nama_lengkap" value="Nama Lengkap *" />
-                                <TextInput id="nama_lengkap" className="mt-1 block w-full"
+                                <TextInput id="nama_lengkap" className="mt-1 block w-full text-sm"
                                     value={data.nama_lengkap} onChange={(e) => setData('nama_lengkap', e.target.value)} required />
                                 <InputError message={errors.nama_lengkap} className="mt-1" />
                             </div>
 
                             <div>
                                 <InputLabel htmlFor="nama_panggilan" value="Nama Panggilan" />
-                                <TextInput id="nama_panggilan" className="mt-1 block w-full"
+                                <TextInput id="nama_panggilan" className="mt-1 block w-full text-sm"
                                     value={data.nama_panggilan} onChange={(e) => setData('nama_panggilan', e.target.value)} />
                             </div>
 
@@ -445,23 +447,23 @@ export default function ManageUser({ auth, users, kelas, filters }) {
 
                             <div>
                                 <InputLabel htmlFor="tempat_lahir" value="Tempat Lahir" />
-                                <TextInput id="tempat_lahir" className="mt-1 block w-full"
+                                <TextInput id="tempat_lahir" className="mt-1 block w-full text-sm"
                                     value={data.tempat_lahir} onChange={(e) => setData('tempat_lahir', e.target.value)} />
                             </div>
 
                             <div>
                                 <InputLabel htmlFor="tanggal_lahir" value="Tanggal Lahir" />
-                                <TextInput id="tanggal_lahir" type="date" className="mt-1 block w-full"
+                                <TextInput id="tanggal_lahir" type="date" className="mt-1 block w-full text-sm"
                                     value={data.tanggal_lahir} onChange={(e) => setData('tanggal_lahir', e.target.value)} />
                             </div>
 
                             <div>
                                 <InputLabel htmlFor="no_whatsapp" value="No WhatsApp" />
-                                <TextInput id="no_whatsapp" className="mt-1 block w-full"
+                                <TextInput id="no_whatsapp" className="mt-1 block w-full text-sm"
                                     value={data.no_whatsapp} onChange={(e) => setData('no_whatsapp', e.target.value)} />
                             </div>
 
-                            {/* ── Guru BK & Tenaga Pendidik ── */}
+                            {/*  Guru BK & Tenaga Pendidik  */}
                             {editingUser && (editingUser.role === 'guru_bk' || editingUser.role === 'tenaga_pendidik') && (
                                 <>
                                     <div>
@@ -472,11 +474,11 @@ export default function ManageUser({ auth, users, kelas, filters }) {
                                     </div>
                                     <div>
                                         <InputLabel htmlFor="jabatan" value="Jabatan" />
-                                        <TextInput id="jabatan" className="mt-1 block w-full"
+                                        <TextInput id="jabatan" className="mt-1 block w-full text-sm"
                                             value={data.jabatan} onChange={(e) => setData('jabatan', e.target.value)} />
                                     </div>
 
-                                    {/* ✅ Penugasan: read-only */}
+                                    {/*  Penugasan: read-only */}
                                     {editingUser.penugasan_kelas_aktif?.length > 0 && (
                                         <div className="sm:col-span-2">
                                             <InputLabel value="Penugasan Kelas" />
@@ -504,7 +506,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
                                 </>
                             )}
 
-                            {/* ── Santri ── */}
+                            {/*  Santri  */}
                             {editingUser && editingUser.role === 'santri' && (
                                 <>
                                     <div>
@@ -514,7 +516,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
                                         <p className="text-xs text-gray-400 mt-1">NISN tidak dapat diubah</p>
                                     </div>
 
-                                    {/* ✅ Kelas: READ-ONLY dengan hidden input kelas_id */}
+                                    {/*  Kelas: READ-ONLY dengan hidden input kelas_id */}
                                     <div>
                                         <InputLabel value="Kelas Saat Ini" />
                                         <div className="mt-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm min-h-[38px] flex flex-col justify-center">
@@ -534,13 +536,13 @@ export default function ManageUser({ auth, users, kelas, filters }) {
                                                 </Link>
                                             </p>
                                         </div>
-                                        {/* ✅ FIX: Hidden input untuk mengirim kelas_id ke backend */}
+                                        {/*  FIX: Hidden input untuk mengirim kelas_id ke backend */}
                                         <input type="hidden" name="kelas_id" value={data.kelas_id || ''} />
                                     </div>
 
                                     <div className="sm:col-span-2">
                                         <InputLabel htmlFor="nama_wali" value="Nama Wali" />
-                                        <TextInput id="nama_wali" className="mt-1 block w-full"
+                                        <TextInput id="nama_wali" className="mt-1 block w-full text-sm"
                                             value={data.nama_wali} onChange={(e) => setData('nama_wali', e.target.value)} />
                                     </div>
 
@@ -556,7 +558,7 @@ export default function ManageUser({ auth, users, kelas, filters }) {
                     </div>
 
                     {/* Foto */}
-                    <div className="px-6 py-4">
+                    <div className="px-5 py-4">
                         <InputLabel value="Foto Profil" />
                         {editingUser && (() => {
                             const p = editingUser.santri_profile || editingUser.guru_bk_profile || editingUser.tenaga_pendidik_profile;
@@ -578,25 +580,27 @@ export default function ManageUser({ auth, users, kelas, filters }) {
                     </div>
 
                     {/* Password */}
-                    <div className="px-6 py-4">
+                    <div className="px-5 py-4">
                         <p className="text-xs text-gray-400 mb-3">Kosongkan jika tidak ingin mengubah password</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <InputLabel htmlFor="password" value="Password Baru" />
-                                <TextInput id="password" type="password" className="mt-1 block w-full"
+                                <TextInput id="password" type="password" className="mt-1 block w-full text-sm"
                                     value={data.password} onChange={(e) => setData('password', e.target.value)} />
                                 <InputError message={errors.password} className="mt-1" />
                             </div>
                             <div>
                                 <InputLabel htmlFor="password_confirmation" value="Konfirmasi Password" />
-                                <TextInput id="password_confirmation" type="password" className="mt-1 block w-full"
+                                <TextInput id="password_confirmation" type="password" className="mt-1 block w-full text-sm"
                                     value={data.password_confirmation} onChange={(e) => setData('password_confirmation', e.target.value)} />
                             </div>
                         </div>
                     </div>
 
+                    </div>{/* /scrollable body */}
+
                     {/* Footer Modal */}
-                    <div className="px-6 py-4 bg-gray-50 rounded-b-lg">
+                    <div className="px-5 py-4 bg-gray-50 rounded-b-lg shrink-0">
                         {errors.update && (
                             <p className="text-sm text-red-600 mb-3 p-2 bg-red-50 border border-red-200 rounded">
                                 {errors.update}
@@ -614,9 +618,9 @@ export default function ManageUser({ auth, users, kelas, filters }) {
                 </form>
             </Modal>
 
-            {/* ══════════════════════════════════════════════════
+            {/* 
                 Modal Delete
-            ══════════════════════════════════════════════════ */}
+             */}
             <Modal show={showDeleteModal} onClose={() => setShowDeleteModal(false)}>
                 <div className="p-6">
                     <div className="flex items-start gap-4">
@@ -641,6 +645,6 @@ export default function ManageUser({ auth, users, kelas, filters }) {
                     </div>
                 </div>
             </Modal>
-        </AppLayout>
+        </GuruBkLayout>
     );
 }

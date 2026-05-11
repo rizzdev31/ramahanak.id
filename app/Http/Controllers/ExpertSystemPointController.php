@@ -27,7 +27,7 @@ class ExpertSystemPointController extends Controller
         try {
             $query = LaporanExpertSystemPoint::query()
                 ->with([
-                    'santri.santriProfile',
+                    'santri.santriProfile.kelas',
                     'validator'
                 ])
                 ->latest('tanggal_trigger')
@@ -68,10 +68,11 @@ class ExpertSystemPointController extends Controller
                 return [
                     'id' => $item->id,
                     'santri' => $item->santri && $item->santri->santriProfile ? [
-                        'id' => $item->santri->id,
-                        'nama_lengkap' => $item->santri->santriProfile->nama_lengkap,
+                        'id'             => $item->santri->id,
+                        'nama_lengkap'   => $item->santri->santriProfile->nama_lengkap,
                         'nama_panggilan' => $item->santri->santriProfile->nama_panggilan,
-                        'nisn' => $item->santri->santriProfile->nisn,
+                        'nisn'           => $item->santri->santriProfile->nisn,
+                        'kelas_kode'     => $item->santri->santriProfile->kelas?->kode_kelas ?? '-',
                     ] : null,
                     'jenis' => $item->jenis,
                     'jenis_label' => $item->jenis_label,
@@ -130,7 +131,7 @@ class ExpertSystemPointController extends Controller
     public function show(LaporanExpertSystemPoint $laporan)
     {
         try {
-            // ✅ UPDATED: Load buktis relationship
+            //  UPDATED: Load buktis relationship
             $laporan->load([
                 'santri.santriProfile',
                 'validator.guruBkProfile',
@@ -181,7 +182,7 @@ class ExpertSystemPointController extends Controller
                     'final_status_badge_color' => $laporan->final_status_badge_color,
                     'has_pdf' => $laporan->hasPdf(),
                     'pdf_url' => $laporan->pdf_url,
-                    // ✅ NEW: Buktis data
+                    //  NEW: Buktis data
                     'buktis' => $laporan->buktis->map(function($bukti) {
                         return [
                             'id' => $bukti->id,
@@ -283,20 +284,32 @@ class ExpertSystemPointController extends Controller
     public function complete(Request $request, LaporanExpertSystemPoint $laporan)
     {
         try {
-            // Validasi input (deadline & kesepakatan WAJIB)
+            // Validasi semua field dari form complete modal
             $validated = $request->validate([
-                'tanggal_batas_pelaksanaan' => 'required|date|after:today',
-                'kesepakatan_keterlambatan' => 'required|string|min:10',
+                'catatan_bk'                 => 'required|string|min:5|max:5000',
+                'aksi_bk'                    => 'nullable|string|max:5000',
+                'tanggal_batas_pelaksanaan'  => 'required|date|after:today',
+                'kesepakatan_keterlambatan'  => 'required|string|min:10',
             ], [
-                'tanggal_batas_pelaksanaan.required' => 'Deadline pelaksanaan wajib diisi',
-                'tanggal_batas_pelaksanaan.after' => 'Deadline harus setelah hari ini',
-                'kesepakatan_keterlambatan.required' => 'Kesepakatan keterlambatan wajib diisi',
-                'kesepakatan_keterlambatan.min' => 'Kesepakatan minimal 10 karakter',
+                'catatan_bk.required'                => 'Catatan BK wajib diisi.',
+                'catatan_bk.min'                     => 'Catatan BK minimal 5 karakter.',
+                'tanggal_batas_pelaksanaan.required' => 'Deadline pelaksanaan wajib diisi.',
+                'tanggal_batas_pelaksanaan.after'    => 'Deadline harus setelah hari ini.',
+                'kesepakatan_keterlambatan.required' => 'Kesepakatan keterlambatan wajib diisi.',
+                'kesepakatan_keterlambatan.min'      => 'Kesepakatan minimal 10 karakter.',
             ]);
+
+            //  KRITIS: Simpan catatan_bk ke DB DULU sebelum canComplete() dicek.
+            // canComplete() return false jika catatan_bk kosong, jadi harus update dulu.
+            $laporan->update([
+                'catatan_bk' => $validated['catatan_bk'],
+                'aksi_bk'    => $validated['aksi_bk'] ?? null,
+            ]);
+            $laporan->refresh(); // reload dari DB agar canComplete() baca nilai terbaru
 
             if (!$laporan->canComplete()) {
                 return back()->withErrors([
-                    'complete' => 'Laporan tidak dapat diselesaikan. Pastikan catatan BK sudah diisi.'
+                    'complete' => 'Laporan tidak dapat diselesaikan (status: ' . $laporan->status_label . ')'
                 ]);
             }
 
@@ -363,7 +376,7 @@ class ExpertSystemPointController extends Controller
     }
 
     /**
-     * ✅ NEW: View PDF in browser (inline)
+     *  NEW: View PDF in browser (inline)
      */
     public function viewPdf(LaporanExpertSystemPoint $laporan)
     {
@@ -404,7 +417,7 @@ class ExpertSystemPointController extends Controller
     }
 
     /**
-     * ✅ NEW: Download PDF Rekam Medis WITH Bukti Pelaksanaan (Approved)
+     *  NEW: Download PDF Rekam Medis WITH Bukti Pelaksanaan (Approved)
      */
     public function downloadPdfWithBukti(LaporanExpertSystemPoint $laporan)
     {
@@ -466,9 +479,9 @@ class ExpertSystemPointController extends Controller
         }
     }
 
-    // ══════════════════════════════════════════════════════════
+    // 
     // HELPER METHODS
-    // ══════════════════════════════════════════════════════════
+    // 
 
     private function getNamaLengkap($user)
     {

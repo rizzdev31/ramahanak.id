@@ -30,7 +30,7 @@ class ExpertSystemPointService
             // Get or create tracking
             $tracking = SantriExpertSystemTracking::getOrCreate($santriId);
 
-            // ✅ FIX: Calculate poin dari riwayat_santri (single source of truth)
+            //  FIX: Calculate poin dari riwayat_santri (single source of truth)
             // Riwayat santri sudah di-insert saat complete pelanggaran/apresiasi
             $totalPoinPelanggaran = RiwayatSantri::where('santri_id', $santriId)
                 ->where('jenis_laporan', 'pelanggaran')
@@ -115,15 +115,17 @@ class ExpertSystemPointService
     private function createLaporanKonsekuensi($santriId, $variabel, $totalPoin)
     {
         return LaporanExpertSystemPoint::create([
-            'santri_id' => $santriId,
-            'jenis' => 'konsekuensi',
-            'kode' => $variabel->kode,
-            'total_poin_saat_trigger' => $totalPoin,
+            'santri_id'                => $santriId,
+            'jenis'                    => 'konsekuensi',
+            'kode'                     => $variabel->kode,
+            'total_poin_saat_trigger'  => $totalPoin,
             'threshold_poin_triggered' => $variabel->poin,
-            'konsekuensi_atau_reward' => $variabel->konsekuensi,
-            'rekomendasi' => $variabel->rekomendasi,
-            'status' => 'pending',
-            'tanggal_trigger' => now(),
+            'konsekuensi_atau_reward'  => $variabel->konsekuensi,
+            'rekomendasi'              => $variabel->rekomendasi,
+            'status'                   => 'pending',
+            'tanggal_trigger'          => now(),
+            'catatan_bk'               => '',
+            'aksi_bk'                  => null,
         ]);
     }
 
@@ -133,15 +135,17 @@ class ExpertSystemPointService
     private function createLaporanReward($santriId, $variabel, $totalPoin)
     {
         return LaporanExpertSystemPoint::create([
-            'santri_id' => $santriId,
-            'jenis' => 'reward',
-            'kode' => $variabel->kode,
-            'total_poin_saat_trigger' => $totalPoin,
+            'santri_id'                => $santriId,
+            'jenis'                    => 'reward',
+            'kode'                     => $variabel->kode,
+            'total_poin_saat_trigger'  => $totalPoin,
             'threshold_poin_triggered' => $variabel->poin,
-            'konsekuensi_atau_reward' => $variabel->reward,
-            'rekomendasi' => $variabel->rekomendasi,
-            'status' => 'pending',
-            'tanggal_trigger' => now(),
+            'konsekuensi_atau_reward'  => $variabel->reward,
+            'rekomendasi'              => $variabel->rekomendasi,
+            'status'                   => 'pending',
+            'tanggal_trigger'          => now(),
+            'catatan_bk'               => '',
+            'aksi_bk'                  => null,
         ]);
     }
 

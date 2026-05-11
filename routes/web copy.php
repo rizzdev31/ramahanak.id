@@ -31,21 +31,20 @@ use App\Http\Controllers\BimbinganKelasController;
 use App\Http\Controllers\MyBimbinganController;
 use App\Http\Controllers\TenagaPendidikSantriController;
 use App\Http\Controllers\MySantriProfilController;
-use App\Http\Controllers\WelcomeController;
-use App\Http\Controllers\BelajarKonselingController;
-use App\Http\Controllers\ArtikelBkController;
 
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-//           PUBLIC ROUTES                                                                                                                                                                                     
-Route::get('/', [WelcomeController::class, 'index'])->name('welcome');
-Route::get('/fitur', fn() => Inertia::render('FiturPage'))->name('fitur');
-Route::get('/belajar-konseling', [BelajarKonselingController::class, 'index'])->name('belajar-konseling.index');
-Route::get('/belajar-konseling/{slug}', [BelajarKonselingController::class, 'show'])->name('belajar-konseling.show');
+Route::get('/', function () {
+    return Inertia::render('Welcome', [
+        'canLogin'       => Route::has('login'),
+        'canRegister'    => Route::has('register'),
+        'laravelVersion' => Application::VERSION,
+        'phpVersion'     => PHP_VERSION,
+    ]);
+});
 
-//           AUTHENTICATED - SEMUA ROLE                                                                                                                                              
 Route::middleware(['auth', 'verified', 'checkStatus'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::prefix('profile')->name('profile.')->group(function () {
@@ -57,7 +56,6 @@ Route::middleware(['auth', 'verified', 'checkStatus'])->group(function () {
     Route::post('/laporan',       [LaporanAwalController::class, 'store'])->name('laporan.store');
 });
 
-//           GURU BK                                                                                                                                                                                                       
 Route::middleware(['auth', 'verified', 'checkStatus', 'role:guru_bk'])->group(function () {
 
     Route::prefix('manage-user')->name('manage-user.')->group(function () {
@@ -144,8 +142,12 @@ Route::middleware(['auth', 'verified', 'checkStatus', 'role:guru_bk'])->group(fu
 
     Route::prefix('expert-system-konselor')->name('expert-system-konselor.')->group(function () {
         Route::get('/', [ExpertSystemKonselorController::class, 'index'])->name('index');
+
+        // - FIX: Scan manual - trigger laporan dari data riwayat yang sudah ada
+        // Berguna untuk: data historis, testing, dan backup trigger
         Route::post('/scan-now', [ExpertSystemKonselorController::class, 'scanNow'])->name('scan-now');
         Route::post('/scan-santri/{santriId}', [ExpertSystemKonselorController::class, 'scanForSantri'])->name('scan-santri');
+
         Route::get('/{laporan}', [ExpertSystemKonselorController::class, 'show'])->name('show');
         Route::post('/{laporan}/approve',  [ExpertSystemKonselorController::class, 'approve'])->name('approve');
         Route::post('/{laporan}/complete', [ExpertSystemKonselorController::class, 'complete'])->name('complete');
@@ -210,7 +212,6 @@ Route::middleware(['auth', 'verified', 'checkStatus', 'role:guru_bk'])->group(fu
         Route::post('/sync', [ApprovalManagementController::class, 'syncLaporanApprovals'])->name('sync');
     });
 
-    // My Bimbingan Berkala (Guru BK)
     Route::prefix('my-bimbingan')->name('my-bimbingan.')->group(function () {
         Route::prefix('template')->name('template.')->group(function () {
             Route::get('/', [BimbinganBerkalaController::class, 'templateIndex'])->name('index');
@@ -244,23 +245,13 @@ Route::middleware(['auth', 'verified', 'checkStatus', 'role:guru_bk'])->group(fu
             Route::get('/preview-laporan/{sesi}', [BimbinganBerkalaController::class, 'sesiPreviewLaporan'])->name('preview-laporan');
             Route::post('/konfirmasi-laporan/{sesi}', [BimbinganBerkalaController::class, 'sesiKonfirmasiLaporan'])->name('konfirmasi-laporan');
         });
+        // Logbook BK: /my-bimbingan/logbook-santri
+        // URL berbeda dari santri /my-bimbingan/logbook untuk hindari konflik middleware group
         Route::get('/logbook-santri', [BimbinganBerkalaController::class, 'logbook'])->name('logbook');
-    });
-
-    // Artikel Belajar Konseling (BK Upload)
-    Route::prefix('artikel-bk')->name('artikel-bk.')->group(function () {
-        Route::get('/',                            [ArtikelBkController::class, 'index'])->name('index');
-        Route::get('/create',                      [ArtikelBkController::class, 'create'])->name('create');
-        Route::post('/',                           [ArtikelBkController::class, 'store'])->name('store');
-        Route::get('/{artikelBk}/edit',            [ArtikelBkController::class, 'edit'])->name('edit');
-        Route::post('/{artikelBk}',                [ArtikelBkController::class, 'update'])->name('update');
-        Route::delete('/{artikelBk}',              [ArtikelBkController::class, 'destroy'])->name('destroy');
-        Route::post('/{artikelBk}/toggle-publish', [ArtikelBkController::class, 'togglePublish'])->name('toggle-publish');
     });
 
 }); // end guru_bk
 
-//           SHARED (Guru BK + Tenaga Pendidik)                                                                                                                   
 Route::middleware(['auth', 'verified', 'checkStatus', 'role:tenaga_pendidik,guru_bk'])->group(function () {
 
     Route::prefix('laporan-wali')->name('laporan-wali.')->group(function () {
@@ -274,6 +265,7 @@ Route::middleware(['auth', 'verified', 'checkStatus', 'role:tenaga_pendidik,guru
         Route::get('/{jadwal}', [BimbinganKelasController::class, 'show'])->name('show');
     });
 
+    // Tenaga Pendidik pantau santri di kelas yang diampu (read-only)
     Route::prefix('santri-kelas')->name('santri-kelas.')->group(function () {
         Route::get('/',         [TenagaPendidikSantriController::class, 'index'])->name('index');
         Route::get('/{santri}', [TenagaPendidikSantriController::class, 'show'])->name('show');
@@ -281,10 +273,14 @@ Route::middleware(['auth', 'verified', 'checkStatus', 'role:tenaga_pendidik,guru
 
 }); // end shared
 
-//           SANTRI                                                                                                                                                                                                          
 Route::middleware(['auth', 'verified', 'checkStatus', 'role:santri'])->group(function () {
 
-    Route::get('/my-profil', [MySantriProfilController::class, 'index'])->name('my-profil.index');
+    // ===========================================================
+    // MY PROFIL - Monitoring rekam jejak diri sendiri
+    // Santri melihat semua laporan mereka sendiri (read-only)
+    // ===========================================================
+    Route::get('/my-profil', [MySantriProfilController::class, 'index'])
+        ->name('my-profil.index');
 
     Route::prefix('my-expert-system-point')->name('my-expert-system-point.')->group(function () {
         Route::get('/', [MyExpertSystemPointController::class, 'index'])->name('index');

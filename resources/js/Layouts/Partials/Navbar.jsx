@@ -1,5 +1,4 @@
 import { Link } from '@inertiajs/react';
-import ApplicationLogo from '@/Components/ApplicationLogo';
 import UserMenu from './UserMenu';
 
 export default function NavBar({ user, navigation, mobileMenuOpen, setMobileMenuOpen }) {
@@ -11,9 +10,14 @@ export default function NavBar({ user, navigation, mobileMenuOpen, setMobileMenu
                     {/* Left: Logo */}
                     <div className="flex items-center gap-8">
                         <Link href={route('dashboard')} className="flex items-center gap-3 shrink-0">
-                            <ApplicationLogo className="h-9 w-auto fill-current text-indigo-600" />
+                            <img
+                                src="/images/Logo_RA.png"
+                                alt="RamahAnak.id"
+                                className="h-11 w-auto object-contain"
+                                onError={e => { e.target.style.display = 'none'; }}
+                            />
                             <span className="hidden sm:block text-lg font-bold text-gray-900">
-                                Ramah Anak
+                                Ramah Anak.id
                             </span>
                         </Link>
 

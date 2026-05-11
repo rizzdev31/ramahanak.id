@@ -1,293 +1,252 @@
-import AppLayout from '@/Layouts/AppLayout';
-import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
+import GuruBkLayout from '@/Layouts/GuruBk/GuruBkLayout';
+import { Head, Link, router } from '@inertiajs/react';
 
-export default function Index({ auth, laporanList, santriList, filters }) {
-    const [search, setSearch] = useState(filters.search || '');
-    const [jenis, setJenis] = useState(filters.jenis || 'all');
-    const [status, setStatus] = useState(filters.status || 'all');
-    const [santriId, setSantriId] = useState(filters.santri_id || '');
+//  Badge helpers 
+const JENIS_CFG = {
+    konsekuensi: { bg: 'bg-red-100',     text: 'text-red-800',     dot: 'bg-red-500'     },
+    reward:      { bg: 'bg-emerald-100', text: 'text-emerald-800', dot: 'bg-emerald-500' },
+};
+const STATUS_CFG = {
+    yellow: { bg: 'bg-amber-100',   text: 'text-amber-800'   },
+    blue:   { bg: 'bg-blue-100',    text: 'text-blue-800'    },
+    green:  { bg: 'bg-emerald-100', text: 'text-emerald-800' },
+    gray:   { bg: 'bg-gray-100',    text: 'text-gray-600'    },
+};
+
+const Badge = ({ children, cfg }) => (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.bg} ${cfg.text} border-current/20`}>
+        {children}
+    </span>
+);
+
+const JenisBadge = ({ jenis, label }) => {
+    const c = JENIS_CFG[jenis] ?? JENIS_CFG.konsekuensi;
+    return (
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${c.bg} ${c.text}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+            {label}
+        </span>
+    );
+};
+
+const StatusBadge = ({ color, label }) => {
+    const c = STATUS_CFG[color] ?? STATUS_CFG.gray;
+    return (
+        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${c.bg} ${c.text}`}>
+            {label}
+        </span>
+    );
+};
+
+// 
+export default function ExpertSystemPointIndex({ auth, laporanList, santriList, filters }) {
+    const [search,    setSearch]    = useState(filters.search    || '');
+    const [jenis,     setJenis]     = useState(filters.jenis     || 'all');
+    const [status,    setStatus]    = useState(filters.status    || 'all');
+    const [santriId,  setSantriId]  = useState(filters.santri_id || '');
 
     const handleFilter = () => {
         router.get(route('expert-system-point.index'), {
-            search,
-            jenis,
-            status,
-            santri_id: santriId,
-        }, {
-            preserveState: true,
-            replace: true,
-        });
+            search, jenis, status, santri_id: santriId,
+        }, { preserveState: true, replace: true });
     };
 
-    const getJenisBadgeClass = (jenis) => {
-        return jenis === 'konsekuensi' 
-            ? 'bg-red-100 text-red-800' 
-            : 'bg-green-100 text-green-800';
+    const handleReset = () => {
+        setSearch(''); setJenis('all'); setStatus('all'); setSantriId('');
+        router.get(route('expert-system-point.index'));
     };
 
-    const getStatusBadgeClass = (color) => {
-        const colors = {
-            yellow: 'bg-yellow-100 text-yellow-800',
-            blue: 'bg-blue-100 text-blue-800',
-            green: 'bg-green-100 text-green-800',
-            gray: 'bg-gray-100 text-gray-800',
-        };
-        return colors[color] || colors.gray;
-    };
+    const selectCls = 'w-full text-sm border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition shadow-sm';
 
     return (
-        <AppLayout user={auth.user}>
+        <GuruBkLayout user={auth.user} header="Expert System Point">
             <Head title="Expert System Point" />
 
-            <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                    {/* Header */}
-                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
-                        <div className="p-6">
-                            <h2 className="text-2xl font-semibold text-gray-800">
-                                📊 Expert System Point
-                            </h2>
-                            <p className="mt-1 text-sm text-gray-600">
-                                Sistem otomatis konsekuensi & reward berdasarkan akumulasi poin santri
-                            </p>
+            <div className="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-5">
+
+                {/* Page intro */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4">
+                    <p className="text-sm text-gray-500 leading-relaxed">
+                        Sistem otomatis konsekuensi dan reward berdasarkan akumulasi poin santri.
+                        Laporan muncul otomatis ketika threshold terpenuhi.
+                    </p>
+                </div>
+
+                {/* Filter */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Cari</label>
+                            <div className="relative">
+                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleFilter()}
+                                    placeholder="Kode, santri..."
+                                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Jenis</label>
+                            <select value={jenis} onChange={e => setJenis(e.target.value)} className={selectCls}>
+                                <option value="all">Semua Jenis</option>
+                                <option value="konsekuensi">Konsekuensi</option>
+                                <option value="reward">Reward</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Status</label>
+                            <select value={status} onChange={e => setStatus(e.target.value)} className={selectCls}>
+                                <option value="all">Semua Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="diproses">Diproses</option>
+                                <option value="selesai">Selesai</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Santri</label>
+                            <select value={santriId} onChange={e => setSantriId(e.target.value)} className={selectCls}>
+                                <option value="">Semua Santri</option>
+                                {santriList.map(s => (
+                                    <option key={s.id} value={s.id}>{s.label}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
-
-                    {/* Filters */}
-                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
-                        <div className="p-6">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                {/* Search */}
-                                <div>
-                                    <input
-                                        type="text"
-                                        value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && handleFilter()}
-                                        placeholder="Cari kode atau santri..."
-                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    />
-                                </div>
-
-                                {/* Jenis */}
-                                <div>
-                                    <select
-                                        value={jenis}
-                                        onChange={(e) => setJenis(e.target.value)}
-                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    >
-                                        <option value="all">Semua Jenis</option>
-                                        <option value="konsekuensi">Konsekuensi</option>
-                                        <option value="reward">Reward</option>
-                                    </select>
-                                </div>
-
-                                {/* Status */}
-                                <div>
-                                    <select
-                                        value={status}
-                                        onChange={(e) => setStatus(e.target.value)}
-                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    >
-                                        <option value="all">Semua Status</option>
-                                        <option value="pending">Pending</option>
-                                        <option value="diproses">Diproses</option>
-                                        <option value="selesai">Selesai</option>
-                                    </select>
-                                </div>
-
-                                {/* Santri */}
-                                <div>
-                                    <select
-                                        value={santriId}
-                                        onChange={(e) => setSantriId(e.target.value)}
-                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    >
-                                        <option value="">Semua Santri</option>
-                                        {santriList.map((santri) => (
-                                            <option key={santri.id} value={santri.id}>
-                                                {santri.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="mt-4">
-                                <button
-                                    onClick={handleFilter}
-                                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                                >
-                                    🔍 Filter
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setSearch('');
-                                        setJenis('all');
-                                        setStatus('all');
-                                        setSantriId('');
-                                        router.get(route('expert-system-point.index'));
-                                    }}
-                                    className="ml-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                                >
-                                    Reset
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Table */}
-                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Tanggal
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Santri
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Jenis
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Kode
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Konsekuensi/Reward
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Poin
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Status
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Aksi
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {laporanList.data.length === 0 ? (
-                                        <tr>
-                                            <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
-                                                Tidak ada data
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        laporanList.data.map((laporan) => (
-                                            <tr key={laporan.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {laporan.tanggal_trigger}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-medium text-gray-900">
-                                                        {laporan.santri?.nama_panggilan || '-'}
-                                                    </div>
-                                                    <div className="text-sm text-gray-500">
-                                                        {laporan.santri?.nisn || '-'}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getJenisBadgeClass(laporan.jenis)}`}>
-                                                        {laporan.jenis_label}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                                                    {laporan.kode}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-gray-900">
-                                                    {laporan.konsekuensi_atau_reward}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">
-                                                        Total: {laporan.total_poin_saat_trigger}
-                                                    </div>
-                                                    <div className="text-sm text-gray-500">
-                                                        Threshold: {laporan.threshold_poin_triggered}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(laporan.status_badge_color)}`}>
-                                                        {laporan.status_label}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                    <a
-                                                        href={route('expert-system-point.show', laporan.id)}
-                                                        className="text-indigo-600 hover:text-indigo-900 inline-flex items-center"
-                                                    >
-                                                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                        </svg>
-                                                        Detail
-                                                    </a>
-                                                    {laporan.has_pdf && (
-                                                        <>
-                                                            <a
-                                                                href={route('expert-system-point.download-pdf', laporan.id)}
-                                                                className="ml-3 text-green-600 hover:text-green-900 inline-flex items-center"
-                                                                title="Download PDF Rekam Medis"
-                                                            >
-                                                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                                </svg>
-                                                                PDF
-                                                            </a>
-                                                            <a
-                                                                href={laporan.pdf_url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="ml-2 text-blue-600 hover:text-blue-900 inline-flex items-center"
-                                                                title="Lihat PDF di tab baru"
-                                                            >
-                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                                                </svg>
-                                                            </a>
-                                                        </>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Pagination */}
-                        {laporanList.links && laporanList.links.length > 3 && (
-                            <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
-                                <div className="flex justify-between items-center">
-                                    <div className="text-sm text-gray-700">
-                                        Showing {laporanList.from} to {laporanList.to} of {laporanList.total} results
-                                    </div>
-                                    <div className="flex gap-1">
-                                        {laporanList.links.map((link, index) => (
-                                            <button
-                                                key={index}
-                                                onClick={() => link.url && router.get(link.url)}
-                                                disabled={!link.url}
-                                                dangerouslySetInnerHTML={{ __html: link.label }}
-                                                className={`px-3 py-1 text-sm rounded ${
-                                                    link.active
-                                                        ? 'bg-indigo-600 text-white'
-                                                        : link.url
-                                                        ? 'bg-white text-gray-700 hover:bg-gray-100'
-                                                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                }`}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                    <div className="flex gap-2">
+                        <button onClick={handleFilter}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 active:scale-95 transition-all">
+                            Terapkan Filter
+                        </button>
+                        <button onClick={handleReset}
+                            className="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 active:scale-95 transition-all">
+                            Reset
+                        </button>
                     </div>
                 </div>
+
+                {/* Tabel  desktop */}
+                <div className="hidden lg:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-gray-100 bg-gray-50/80">
+                                    {['Tanggal Trigger','Santri','Jenis','Kode','Konsekuensi / Reward','Poin','Status','Aksi'].map(h => (
+                                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {laporanList.data.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="8" className="py-16 text-center">
+                                            <div className="flex flex-col items-center gap-2 text-gray-400">
+                                                <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                                </svg>
+                                                <p className="font-medium text-sm">Tidak ada data</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : laporanList.data.map((lap, idx) => (
+                                    <tr key={lap.id} className={`border-b border-gray-50 hover:bg-indigo-50/30 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                                        <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{lap.tanggal_trigger}</td>
+                                        <td className="px-4 py-3">
+                                            <p className="font-semibold text-gray-900 text-sm">{lap.santri?.nama_panggilan ?? '-'}</p>
+                                            {lap.santri?.kelas_kode && (
+                                                <p className="text-xs text-indigo-600 font-medium">Kelas {lap.santri.kelas_kode}</p>
+                                            )}
+                                            <p className="text-xs text-gray-400 font-mono">{lap.santri?.nisn ?? '-'}</p>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <JenisBadge jenis={lap.jenis} label={lap.jenis_label} />
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <span className="font-mono font-bold text-gray-800 text-sm">{lap.kode}</span>
+                                        </td>
+                                        <td className="px-4 py-3 max-w-[200px]">
+                                            <p className="text-sm text-gray-800 truncate">{lap.konsekuensi_atau_reward}</p>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <p className="text-sm font-bold text-gray-900">{lap.total_poin_saat_trigger}</p>
+                                            <p className="text-xs text-gray-400">threshold: {lap.threshold_poin_triggered}</p>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <StatusBadge color={lap.status_badge_color} label={lap.status_label} />
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <div className="flex items-center gap-3">
+                                                <Link href={route('expert-system-point.show', lap.id)}
+                                                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline transition">
+                                                    Proses
+                                                </Link>
+                                                {lap.has_pdf && (
+                                                    <a href={lap.pdf_url} target="_blank" rel="noopener noreferrer"
+                                                        className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 hover:underline transition">
+                                                        PDF
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {laporanList.links?.length > 3 && (
+                        <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/60 flex items-center justify-between gap-2 flex-wrap">
+                            <p className="text-xs text-gray-400">
+                                {laporanList.from}{laporanList.to} dari <span className="font-semibold text-gray-600">{laporanList.total}</span>
+                            </p>
+                            <div className="flex gap-1">
+                                {laporanList.links.map((link, i) => (
+                                    <button key={i} onClick={() => link.url && router.get(link.url)} disabled={!link.url}
+                                        className={`px-3 py-1 rounded-lg text-xs font-medium transition ${link.active ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'} ${!link.url ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                        dangerouslySetInnerHTML={{ __html: link.label }} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Cards  mobile */}
+                <div className="lg:hidden space-y-3">
+                    {laporanList.data.length === 0 ? (
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm py-14 text-center text-gray-400">
+                            <p className="font-medium">Tidak ada data</p>
+                        </div>
+                    ) : laporanList.data.map(lap => (
+                        <div key={lap.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
+                                <div>
+                                    <p className="font-bold text-gray-900">{lap.santri?.nama_panggilan ?? '-'}</p>
+                                    {lap.santri?.kelas_kode && (
+                                        <p className="text-xs text-indigo-600 font-medium">Kelas {lap.santri.kelas_kode}</p>
+                                    )}
+                                    <p className="text-xs text-gray-400 mt-0.5">{lap.tanggal_trigger}</p>
+                                </div>
+                                <JenisBadge jenis={lap.jenis} label={lap.jenis_label} />
+                            </div>
+                            <div className="px-4 pb-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                                <div>
+                                    <span className="font-mono font-bold text-gray-800 text-sm">{lap.kode}</span>
+                                    <p className="text-xs text-gray-500 mt-0.5 max-w-[180px] truncate">{lap.konsekuensi_atau_reward}</p>
+                                </div>
+                                <StatusBadge color={lap.status_badge_color} label={lap.status_label} />
+                            </div>
+                            <div className="px-4 pb-4">
+                                <Link href={route('expert-system-point.show', lap.id)}
+                                    className="w-full flex items-center justify-center py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 active:scale-95 transition-all">
+                                    Proses Laporan
+                                </Link>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
-        </AppLayout>
+        </GuruBkLayout>
     );
 }
