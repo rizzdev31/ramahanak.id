@@ -3,7 +3,7 @@
 #.env
 .env.backup
 .env.local
-.env.example
+.env
 env.production
 .env.production
 .phpactor.json
