@@ -1,0 +1,17 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.ramahanak.ppmannursidoarjo.com }}
+          username: ${{ secrets.u8796145510 }}
+          password: ${{ secrets.Muh4mm4dnur@ }}
+          script: bash /home/u8796145510/domains/ramahanak.ppmannursidoarjo.com/ramahanak.id/deploy.sh
