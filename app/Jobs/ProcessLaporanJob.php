@@ -10,6 +10,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 class ProcessLaporanJob implements ShouldQueue
@@ -96,9 +97,16 @@ class ProcessLaporanJob implements ShouldQueue
                 throw new \Exception($result['error'] ?? $result['message'] ?? 'Preprocessing failed');
             }
 
+            // Flask API no-db mode: simpan hasil ke DB dari Laravel
             $hasilId = $result['hasil_preprocessing_id'] ?? null;
+
             if (!$hasilId) {
-                throw new \Exception('Preprocessing tidak mengembalikan hasil_preprocessing_id');
+                // Flask tidak simpan ke DB  Laravel yang simpan
+                $hasilId = $this->saveHasilPreprocessing($result, $laporan);
+                Log::info('HasilPreprocessing saved by Laravel', [
+                    'laporan_id' => $this->laporanId,
+                    'hasil_id'   => $hasilId,
+                ]);
             }
 
             $hasil = HasilPreprocessing::find($hasilId);
@@ -195,20 +203,28 @@ class ProcessLaporanJob implements ShouldQueue
             throw new \Exception('NLP_API_URL tidak dikonfigurasi di .env');
         }
 
-        Log::info('Calling Flask NLP API', [
-            'laporan_id' => $this->laporanId,
-            'api_url'    => $apiUrl . '/preprocess',
+        // Ambil kamus words dari DB Laravel untuk dikirim ke Flask
+        // Flask tidak akses DB sendiri - Laravel yang sediakan data
+        $kamusWords = $this->getKamusWords();
+        $santriMap  = $this->getSantriMap();
+
+        Log::info('Calling Flask NLP API (no-db mode)', [
+            'laporan_id'   => $this->laporanId,
+            'api_url'      => $apiUrl . '/preprocess',
+            'kamus_count'  => count($kamusWords),
+            'santri_count' => count($santriMap),
         ]);
+
+        $variabelData = $this->getVariabelData();
 
         $response = Http::timeout(90)
             ->withHeaders(['X-API-Token' => $apiToken])
             ->post($apiUrl . '/preprocess', [
                 'laporan_id'   => $this->laporanId,
-                'teks_laporan' => $laporan->teks_laporan,
-                'db_host'      => env('DB_HOST', 'localhost'),
-                'db_name'      => env('DB_DATABASE'),
-                'db_user'      => env('DB_USERNAME'),
-                'db_pass'      => env('DB_PASSWORD'),
+                'teks_laporan' => $laporan->text_laporan,
+                'kamus_words'  => $kamusWords,
+                'santri_map'   => $santriMap,
+                'variabel_data'=> $variabelData,
             ]);
 
         if ($response->status() === 401) {
@@ -225,8 +241,12 @@ class ProcessLaporanJob implements ShouldQueue
         $result = $response->json();
 
         Log::info('Flask API response received', [
-            'laporan_id' => $this->laporanId,
-            'status'     => $result['status'] ?? 'unknown',
+            'laporan_id'      => $this->laporanId,
+            'status'          => $result['status'] ?? 'unknown',
+            'kode_matched'    => $result['kode_matched'] ?? [],
+            'pelaku_nama'     => $result['pelaku_nama'] ?? null,
+            'korban_nama'     => $result['korban_nama'] ?? null,
+            'kata_kerja_dasar'=> $result['kata_kerja_dasar'] ?? null,
         ]);
 
         return $result;
@@ -336,6 +356,163 @@ class ProcessLaporanJob implements ShouldQueue
     private function getScriptPath(): string
     {
         return base_path('python/preprocessing.py');
+    }
+
+    //  Helpers untuk Flask API no-db mode 
+
+    /**
+     * Ambil semua kamus kata dari variabel basis pengetahuan.
+     * Dikirim ke Flask agar NER bisa filter kata kamus dari nama orang.
+     */
+    private function getKamusWords(): array
+    {
+        try {
+            $words = [];
+            $tables = [
+                'variabel_pelanggaran',
+                'variabel_apresiasi',
+                'variabel_konselor',
+            ];
+            foreach ($tables as $table) {
+                $rows = \DB::table($table)->select('kamus_kata')->whereNotNull('kamus_kata')->get();
+                foreach ($rows as $row) {
+                    $kata = array_map('trim', explode(',', $row->kamus_kata));
+                    $words = array_merge($words, array_filter($kata));
+                }
+            }
+            return array_values(array_unique($words));
+        } catch (\Exception $e) {
+            Log::warning('getKamusWords failed', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
+     * Ambil map nama_panggilan -> id santri aktif.
+     * Dikirim ke Flask untuk validasi entitas tanpa akses DB langsung.
+     */
+    private function getSantriMap(): array
+    {
+        try {
+            $santris = \DB::table('users')
+                ->join('santri_profiles', 'users.id', '=', 'santri_profiles.user_id')
+                ->where('users.role', 'santri')
+                ->where('users.status', 'active')
+                ->select('santri_profiles.nama_panggilan',
+                         'santri_profiles.nama_lengkap',
+                         'users.id')
+                ->get();
+
+            $map = [];
+            foreach ($santris as $s) {
+                // Tambahkan berbagai variasi case agar NER bisa cocokkan
+                if ($s->nama_panggilan) {
+                    $np = trim($s->nama_panggilan);
+                    $map[strtolower($np)]  = $s->id;  // lowercase
+                    $map[ucfirst($np)]     = $s->id;  // Kapital awal
+                    $map[$np]              = $s->id;  // Original
+                }
+                if ($s->nama_lengkap) {
+                    $nl = trim($s->nama_lengkap);
+                    $map[strtolower($nl)]  = $s->id;
+                    $map[ucfirst($nl)]     = $s->id;
+                    // Nama depan saja
+                    $parts = explode(' ', $nl);
+                    if (count($parts) > 1) {
+                        $map[strtolower($parts[0])] = $s->id;
+                        $map[ucfirst($parts[0])]    = $s->id;
+                    }
+                }
+            }
+            Log::info('getSantriMap', ['count' => count($map)]);
+            return $map;
+        } catch (\Exception $e) {
+            Log::warning('getSantriMap failed', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
+     * Ambil data variabel basis pengetahuan dari DB Laravel.
+     * Format sesuai yang dibutuhkan kode_matching.py:
+     * [{kode, kategori, kamus_kata, negatable, counterpart_kode}, ...]
+     */
+    private function getVariabelData(): array
+    {
+        try {
+            $all = [];
+
+            // 1. Pelanggaran
+            $rows = \DB::table('variabel_pelanggaran')
+                ->select('kode', 'kamus_kata', 'negatable', 'counterpart_kode')
+                ->whereNotNull('kamus_kata')->get();
+            foreach ($rows as $r) {
+                $all[] = [
+                    'kode'            => $r->kode,
+                    'kategori'        => 'pelanggaran',
+                    'kamus_kata'      => $r->kamus_kata ?? '',
+                    'negatable'       => (bool)($r->negatable ?? false),
+                    'counterpart_kode'=> $r->counterpart_kode ?? null,
+                ];
+            }
+
+            // 2. Apresiasi
+            $rows = \DB::table('variabel_apresiasi')
+                ->select('kode', 'kamus_kata', 'negatable', 'counterpart_kode')
+                ->whereNotNull('kamus_kata')->get();
+            foreach ($rows as $r) {
+                $all[] = [
+                    'kode'            => $r->kode,
+                    'kategori'        => 'apresiasi',
+                    'kamus_kata'      => $r->kamus_kata ?? '',
+                    'negatable'       => (bool)($r->negatable ?? false),
+                    'counterpart_kode'=> $r->counterpart_kode ?? null,
+                ];
+            }
+
+            // 3. Konselor
+            $rows = \DB::table('variabel_konselor')
+                ->select('kode', 'kamus_kata')
+                ->whereNotNull('kamus_kata')->get();
+            foreach ($rows as $r) {
+                $all[] = [
+                    'kode'            => $r->kode,
+                    'kategori'        => 'konselor',
+                    'kamus_kata'      => $r->kamus_kata ?? '',
+                    'negatable'       => false,
+                    'counterpart_kode'=> null,
+                ];
+            }
+
+            Log::info('getVariabelData loaded', ['count' => count($all)]);
+            return $all;
+
+        } catch (\Exception $e) {
+            Log::warning('getVariabelData failed', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
+     * Simpan hasil preprocessing dari Flask ke database.
+     * Dipanggil setelah Flask return JSON hasil NLP.
+     */
+    private function saveHasilPreprocessing(array $result, LaporanAwal $laporan): int
+    {
+        $hasil = HasilPreprocessing::create([
+            'laporan_awal_id'   => $this->laporanId,
+            'kode_matched'      => $result['kode_matched']       ?? [],
+            'pelaku_nama'       => $result['pelaku_nama']        ?? null,
+            'pelaku_santri_id'  => $result['pelaku_santri_id']   ?? null,
+            'korban_nama'       => $result['korban_nama']        ?? null,
+            'korban_santri_id'  => $result['korban_santri_id']   ?? null,
+            'kata_kerja_dasar'  => $result['kata_kerja_dasar']   ?? null,
+            'preprocessing_data'=> $result['preprocessing_data'] ?? [],
+            'status'            => 'pending_validasi',
+            'processed_at'      => now(),
+        ]);
+
+        return $hasil->id;
     }
 
     public function failed(\Exception $exception)

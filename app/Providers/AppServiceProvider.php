@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Console\Scheduling\Schedule;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -15,12 +16,10 @@ class AppServiceProvider extends ServiceProvider
         // ============================================
         // EXPERT SYSTEM KONSELOR - SERVICES
         // ============================================
-        
+
         /**
          * Register ForwardChainingService as singleton
-         * 
          * Singleton pattern ensures hanya 1 instance dibuat per request
-         * untuk efficiency dan consistency
          */
         $this->app->singleton(\App\Services\ForwardChainingService::class, function ($app) {
             return new \App\Services\ForwardChainingService();
@@ -28,24 +27,12 @@ class AppServiceProvider extends ServiceProvider
 
         /**
          * Register PdfRekamMedisService as singleton (if exists)
-         * 
-         * Service untuk generate PDF rekam medis
          */
         if (class_exists(\App\Services\PdfRekamMedisService::class)) {
             $this->app->singleton(\App\Services\PdfRekamMedisService::class, function ($app) {
                 return new \App\Services\PdfRekamMedisService();
             });
         }
-
-        // ============================================
-        // OTHER SERVICE REGISTRATIONS
-        // ============================================
-
-        // Add your other service registrations here
-        // Example:
-        // $this->app->singleton(SomeService::class, function ($app) {
-        //     return new SomeService();
-        // });
     }
 
     /**
@@ -59,18 +46,34 @@ class AppServiceProvider extends ServiceProvider
         // GLOBAL CONFIGURATIONS
         // ============================================
 
-        // Set default timezone
         date_default_timezone_set('Asia/Jakarta');
-
-        // Set locale
         config(['app.locale' => 'id']);
-        
+
         // ============================================
-        // MODEL OBSERVERS (Optional)
+        // SCHEDULER
         // ============================================
-        
-        // Register model observers if needed
-        // Example:
-        // \App\Models\LaporanExpertSystemKonselor::observe(\App\Observers\LaporanKonselorObserver::class);
+
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+
+            // 1. Forward Chaining  setiap malam 23:00 WIB
+            //    Eksekusi 43 rule IF-THEN, generate laporan konselor otomatis
+            $schedule->command('konselor:check-triggers')
+                ->dailyAt('23:00')
+                ->timezone('Asia/Jakarta')
+                ->appendOutputTo(storage_path('logs/konselor-triggers.log'));
+
+            // 2. Expert System Point Sync  setiap jam
+            //    Cek threshold poin santri, trigger konsekuensi/reward otomatis
+            $schedule->command('expert-system:sync')
+                ->hourly()
+                ->appendOutputTo(storage_path('logs/expert-system-sync.log'));
+
+            // 3. Sync Laporan Approvals  setiap hari jam 01:00 WIB
+            //    Sinkronisasi approval dengan penugasan kelas aktif
+            $schedule->command('laporan:sync-approvals')
+                ->dailyAt('01:00')
+                ->timezone('Asia/Jakarta')
+                ->appendOutputTo(storage_path('logs/laporan-sync.log'));
+        });
     }
 }

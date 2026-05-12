@@ -279,7 +279,7 @@ export default function Welcome({ auth, stats = {} }) {
 
                                 {/* CTA */}
                                 <div className="hero-enter-delay-3 flex flex-wrap gap-4">
-                                    <Link href='/fitur'
+                                    <Link href={route('login')}
                                         className="group px-7 py-3.5 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2">
                                         Mulai Sekarang
                                         <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
