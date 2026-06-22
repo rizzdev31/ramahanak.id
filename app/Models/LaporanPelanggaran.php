@@ -12,6 +12,10 @@ class LaporanPelanggaran extends Model
     protected $table = 'laporan_pelanggaran';
 
     protected $fillable = [
+        'sumber_input',
+        'external_app',
+        'external_ref_id',
+        'external_actor',
         'hasil_preprocessing_id',
         'pelaku_santri_id',
         'korban_santri_id',

@@ -12,6 +12,10 @@ class LaporanApresiasi extends Model
     protected $table = 'laporan_apresiasi';
 
     protected $fillable = [
+        'sumber_input',
+        'external_app',
+        'external_ref_id',
+        'external_actor',
         'hasil_preprocessing_id',
         'santri_id',
         'kode_apresiasi',
