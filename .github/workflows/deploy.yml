@@ -14,4 +14,5 @@ jobs:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           password: ${{ secrets.SSH_PASSWORD }}
+          port: 65002
           script: bash /home/u879614510/domains/ramahanak.ppmannursidoarjo.com/ramahanak.id/deploy.sh
