@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    // NLP preprocessing engine (Flask di PythonAnywhere).
+    // WAJIB lewat config (bukan env() langsung) agar tetap terbaca setelah
+    // `php artisan config:cache` di production. Jika 'url' kosong → fallback exec() lokal.
+    'nlp' => [
+        'url'   => env('NLP_API_URL'),
+        'token' => env('NLP_API_TOKEN', ''),
+    ],
+
 ];

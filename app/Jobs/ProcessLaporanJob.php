@@ -187,7 +187,10 @@ class ProcessLaporanJob implements ShouldQueue
      */
     private function isApiMode(): bool
     {
-        return !empty(env('NLP_API_URL'));
+        // PENTING: pakai config(), bukan env(). Setelah `php artisan config:cache`
+        // (dijalankan deploy.sh), env() mengembalikan null → mode salah jatuh ke exec()
+        // yang diblokir di Hostinger. config() tetap terbaca dari cache.
+        return !empty(config('services.nlp.url'));
     }
 
     // 
@@ -196,8 +199,8 @@ class ProcessLaporanJob implements ShouldQueue
 
     private function runViaFlaskApi(LaporanAwal $laporan): ?array
     {
-        $apiUrl   = rtrim(env('NLP_API_URL'), '/');
-        $apiToken = env('NLP_API_TOKEN', '');
+        $apiUrl   = rtrim(config('services.nlp.url'), '/');
+        $apiToken = config('services.nlp.token', '');
 
         if (!$apiUrl) {
             throw new \Exception('NLP_API_URL tidak dikonfigurasi di .env');
