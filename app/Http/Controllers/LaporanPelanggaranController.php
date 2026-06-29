@@ -64,12 +64,11 @@ class LaporanPelanggaranController extends Controller
 
             // Transform data
             $laporanList->through(function ($item) {
-                if (!$item->hasilPreprocessing) {
-                    return null;
-                }
-
+                // Catatan: laporan dari API integrasi (Smart Eksekusi/Absensi) TIDAK punya
+                // hasilPreprocessing (sumber non-NLP). Jangan di-drop — tetap ditampilkan.
                 return [
                     'id' => $item->id,
+                    'sumber_input' => $item->sumber_input,
                     'kode_pelanggaran' => $item->kode_pelanggaran,
                     'bobot_poin' => $item->bobot_poin,
                     'tindakan_default' => $item->tindakan_default,
@@ -123,20 +122,20 @@ class LaporanPelanggaranController extends Controller
                         'keterangan' => $item->variabelPelanggaran->keterangan,
                     ] : null,
                     
-                    // Laporan awal
-                    'laporan_awal' => [
+                    // Laporan awal (null untuk laporan non-NLP dari API integrasi)
+                    'laporan_awal' => $item->hasilPreprocessing ? [
                         'id' => $item->hasilPreprocessing->laporan_awal_id,
                         'text_laporan' => $item->hasilPreprocessing->laporanAwal->text_laporan ?? '',
-                    ],
-                    
+                    ] : null,
+
                     'validated_at' => $item->validated_at?->format('d/m/Y H:i'),
                     'created_at' => $item->created_at?->format('d/m/Y H:i'),
                 ];
             });
 
-            // Filter null
+            // Filter null + re-index (values) agar tetap JSON array, bukan object
             $laporanList->setCollection(
-                $laporanList->getCollection()->filter()
+                $laporanList->getCollection()->filter()->values()
             );
 
             return Inertia::render('LaporanPelanggaran/Index', [
@@ -225,7 +224,8 @@ class LaporanPelanggaranController extends Controller
                     'nisn' => $laporan->korbanSantri->santriProfile->nisn,
                 ] : null,
                 'variabel' => $laporan->variabelPelanggaran,
-                'laporan_awal' => $laporan->hasilPreprocessing->laporanAwal,
+                'sumber_input' => $laporan->sumber_input,
+                'laporan_awal' => $laporan->hasilPreprocessing?->laporanAwal,
             ],
         ]);
     }

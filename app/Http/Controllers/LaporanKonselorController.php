@@ -57,12 +57,10 @@ class LaporanKonselorController extends Controller
             $laporanList = $query->paginate(15);
 
             $laporanList->through(function ($item) {
-                if (!$item->hasilPreprocessing) {
-                    return null;
-                }
-
+                // Laporan dari API integrasi (Smart Eksekusi) tidak punya hasilPreprocessing.
                 return [
                     'id' => $item->id,
+                    'sumber_input' => $item->sumber_input,
                     'kode_konselor' => $item->kode_konselor,
                     'diagnosis_default' => $item->diagnosis_default,
                     'tindakan_default' => $item->tindakan_default,
@@ -105,17 +103,17 @@ class LaporanKonselorController extends Controller
                         'gangguan_mental' => $item->variabelKonselor->gangguan_mental,
                     ] : null,
                     
-                    'laporan_awal' => [
+                    'laporan_awal' => $item->hasilPreprocessing ? [
                         'id' => $item->hasilPreprocessing->laporan_awal_id,
                         'text_laporan' => $item->hasilPreprocessing->laporanAwal->text_laporan ?? '',
-                    ],
-                    
+                    ] : null,
+
                     'validated_at' => $item->validated_at?->format('d/m/Y H:i'),
                     'created_at' => $item->created_at?->format('d/m/Y H:i'),
                 ];
             });
 
-            $laporanList->setCollection($laporanList->getCollection()->filter());
+            $laporanList->setCollection($laporanList->getCollection()->filter()->values());
 
             return Inertia::render('LaporanKonselor/Index', [
                 'laporanList' => $laporanList,

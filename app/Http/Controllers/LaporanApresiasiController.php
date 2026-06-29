@@ -56,12 +56,10 @@ class LaporanApresiasiController extends Controller
 
             $laporanList = $query->paginate(15);
             $laporanList->through(function ($item) {
-                if (!$item->hasilPreprocessing) {
-                    return null;
-                }
-
+                // Laporan dari API integrasi (Smart Eksekusi) tidak punya hasilPreprocessing.
                 return [
                     'id' => $item->id,
+                    'sumber_input' => $item->sumber_input,
                     'kode_apresiasi' => $item->kode_apresiasi,
                     'bobot_poin' => $item->bobot_poin,
                     'reward_default' => $item->reward_default,
@@ -105,17 +103,17 @@ class LaporanApresiasiController extends Controller
                         'keterangan' => $item->variabelApresiasi->keterangan,
                     ] : null,
                     
-                    'laporan_awal' => [
+                    'laporan_awal' => $item->hasilPreprocessing ? [
                         'id' => $item->hasilPreprocessing->laporan_awal_id,
                         'text_laporan' => $item->hasilPreprocessing->laporanAwal->text_laporan ?? '',
-                    ],
-                    
+                    ] : null,
+
                     'validated_at' => $item->validated_at?->format('d/m/Y H:i'),
                     'created_at' => $item->created_at?->format('d/m/Y H:i'),
                 ];
             });
 
-            $laporanList->setCollection($laporanList->getCollection()->filter());
+            $laporanList->setCollection($laporanList->getCollection()->filter()->values());
 
             return Inertia::render('LaporanApresiasi/Index', [
                 'laporanList' => $laporanList,
