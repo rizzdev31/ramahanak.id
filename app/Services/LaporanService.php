@@ -316,7 +316,7 @@ class LaporanService
      * 3. Get semua tenaga pendidik yang ditugaskan di kelas tersebut
      * 4. Create approval record untuk setiap tenaga pendidik
      */
-    protected function createApprovalRecords($laporan, string $laporanType): void
+    public function createApprovalRecords($laporan, string $laporanType): void
     {
         try {
             // Get santri ID (berbeda per jenis laporan)

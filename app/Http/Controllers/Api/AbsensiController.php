@@ -35,7 +35,7 @@ class AbsensiController extends Controller
                 'status'                 => empty($r['duplicate']) ? 'ok' : 'duplicate',
                 'laporan_pelanggaran_id' => $r['laporan']->id,
                 'kode'                   => $r['laporan']->kode_pelanggaran,
-                'approval_status'        => 'pending_bk',
+                'approval_status'        => $r['laporan']->approval_status,
             ];
             if (isset($r['poin'])) $payload['poin'] = $r['poin'];
 

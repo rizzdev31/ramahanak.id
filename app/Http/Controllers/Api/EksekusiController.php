@@ -71,7 +71,7 @@ class EksekusiController extends Controller
             $payload = [
                 'status' => 'ok',
                 $idKey   => $r['laporan']->id,
-                'approval_status' => 'pending_bk',
+                'approval_status' => $r['laporan']->approval_status,
             ];
             if ($withPoin && isset($r['poin'])) $payload['poin'] = $r['poin'];
 
