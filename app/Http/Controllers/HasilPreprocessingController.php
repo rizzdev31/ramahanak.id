@@ -139,7 +139,7 @@ class HasilPreprocessingController extends Controller
                 ];
             });
             
-            $hasilList->setCollection($hasilList->getCollection()->filter());
+            $hasilList->setCollection($hasilList->getCollection()->filter()->values());
 
             return Inertia::render('HasilPreprocessing/Index', [
                 'hasilList' => $hasilList,

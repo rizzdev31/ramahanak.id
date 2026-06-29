@@ -119,7 +119,7 @@ class LaporanWaliController extends Controller
             });
 
             $approvals->setCollection(
-                $approvals->getCollection()->filter()
+                $approvals->getCollection()->filter()->values()
             );
 
             return Inertia::render('LaporanWali/Index', [
