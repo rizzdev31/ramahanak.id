@@ -1,0 +1,1 @@
+import{j as a}from"./app-BOcPXPJ5.js";function i({className:o,style:r}){return a.jsx("img",{src:"/images/Logo_RA.png",alt:"RamahAnak.id",className:o,style:r,onError:t=>{t.target.style.display="none"}})}export{i as A};
