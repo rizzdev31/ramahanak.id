@@ -15,11 +15,13 @@ Sisi RamahAnak (penerima) **sudah diimplementasi & diuji di production**. Bagian
 
 **Keputusan final (sesuai arahan):**
 1. **NISN = nilai "NIP" pengirim** (isi sama). Match ke `santri_profiles.nisn`.
-2. **Pelanggaran, Apresiasi, DAN Konselor → semua masuk `approval_status = 'pending_bk'`**
-   (status `pending`). **Tidak auto-eksekusi.** Guru BK memutuskan **approve/abaikan** di
-   layar **KelolaBk** yang sudah ada. Saat BK approve → `ApprovalManagementController`
-   (existing) menyimpan ke `riwayat_santri` + trigger Expert System. (Jadi tidak perlu service
-   eksekusi terpisah — cukup buat record `pending_bk` yang bersih.)
+2. **Pelanggaran, Apresiasi, DAN Konselor → TETAP lewat GERBANG WALI KELAS** *(UPDATE 2026-06-28)*.
+   Laporan dibuat `approval_status = 'pending_tenaga_pendidik'` + record `laporan_approvals`
+   untuk tiap wali kelas santri (reuse `LaporanService::createApprovalRecords`). Alur:
+   **wali kelas validasi (LaporanWali) → `pending_bk` → Guru BK approve (KelolaBk) →
+   `riwayat_santri` + Expert System**. **Tidak auto-eksekusi, tidak melompati gerbang wali.**
+   Fallback: bila santri tak punya kelas/wali → langsung `pending_bk` (agar tak nyangkut).
+   Respons API mengembalikan `approval_status` yang sebenarnya.
 3. **Kode auto-tarik** oleh pengirim via `GET /variabel/*`.
 4. **Tanpa sinkron master santri** (data santri sudah di RamahAnak).
 5. **Kode telat = `P002`** (`disiplin_waktu`, poin 2).

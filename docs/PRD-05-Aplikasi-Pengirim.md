@@ -24,8 +24,12 @@ Ada **dua aplikasi terpisah**:
 1. RamahAnak **tidak** memproses NLP untuk kiriman ini — kode sudah final dari pengirim.
 2. Identitas santri = **NISN**. Di aplikasi pengirim field-nya mungkin bernama "NIP", tetapi
    **isinya HARUS NISN yang sama** dengan yang ada di RamahAnak.
-3. Setiap laporan yang dikirim akan berstatus **`pending_bk`** di RamahAnak → menunggu
-   keputusan Guru BK (approve/tolak). **Bukan langsung final.**
+3. Setiap laporan yang dikirim **TIDAK langsung final**. RamahAnak memprosesnya lewat
+   **gerbang validasi wali kelas dulu** → `approval_status` biasanya **`pending_tenaga_pendidik`**
+   (wali kelas validasi → lalu `pending_bk` → Guru BK approve). Bila santri tak punya wali,
+   bisa langsung `pending_bk`. *(diperbarui 2026-06-28)* Klien cukup perlakukan **`201 ok`**
+   (apa pun nilai `approval_status`) sebagai **sukses terkirim**; contoh respons di bawah yang
+   menulis `"pending_bk"` hanyalah ilustrasi nilai yang mungkin.
 4. Wajib kirim **`ref_id`** unik & stabil per kejadian (idempotency anti-dobel).
 
 ---
